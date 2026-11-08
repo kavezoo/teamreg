@@ -1,5 +1,12 @@
+/*
+ * Adatkezelési nyilatkozat.
+ *
+ * A belépés szövege erre hivatkozik. A profil mentése továbbra is
+ * accept_privacy: true értéket küld, ha a nyilatkozat még nincs elfogadva.
+ */
 import 'package:flutter/material.dart';
 
+/// A nyilatkozat alulról felhúzott lapja.
 Future<void> showPrivacy(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
@@ -14,6 +21,7 @@ Future<void> showPrivacy(BuildContext context) {
   );
 }
 
+/// A nyilatkozat szövege. A _H cím, a _P bekezdés, a _B felsoroláspont.
 class PrivacyStatement extends StatelessWidget {
   const PrivacyStatement({super.key});
 
@@ -93,6 +101,7 @@ class PrivacyStatement extends StatelessWidget {
   }
 }
 
+/// Fejezetcím a nyilatkozatban.
 class _H extends StatelessWidget {
   const _H(this.text);
 
@@ -107,6 +116,7 @@ class _H extends StatelessWidget {
   }
 }
 
+/// Bekezdés.
 class _P extends StatelessWidget {
   const _P(this.text);
 
@@ -121,6 +131,7 @@ class _P extends StatelessWidget {
   }
 }
 
+/// Felsoroláspont.
 class _B extends StatelessWidget {
   const _B(this.text);
 

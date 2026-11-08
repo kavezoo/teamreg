@@ -1,3 +1,9 @@
+/*
+ * Űrlapok: nevezés, verseny, alcsapat.
+ *
+ * A verseny leírása nem HTML, hanem a pipaclub.hu linkje.
+ * A date_from a listában megjelenés napja, a tag ettől látja a kiírást.
+ */
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -6,6 +12,7 @@ import '../models.dart';
 import '../services/maps.dart';
 import '../widgets/common.dart';
 
+/// Nevezés darabszámai és megjegyzése. A határidő után csak olvasható.
 class RegistrationEditor extends StatefulWidget {
   const RegistrationEditor({required this.competition, this.registration, super.key});
 
@@ -131,6 +138,7 @@ class _RegistrationEditorState extends State<RegistrationEditor> {
   }
 }
 
+/// Egy igény léptetője, nullától felfelé.
 class CountStepper extends StatelessWidget {
   const CountStepper({required this.label, required this.value, required this.onChanged, super.key});
 
@@ -162,6 +170,7 @@ class CountStepper extends StatelessWidget {
   }
 }
 
+/// Verseny ideje, határidő, leírás linkje és a térkép gombja.
 class ScheduleBlock extends StatelessWidget {
   const ScheduleBlock({required this.competition, super.key});
 
@@ -197,6 +206,7 @@ class ScheduleBlock extends StatelessWidget {
   }
 }
 
+/// Verseny létrehozása és szerkesztése. A leírás mezője a link.
 class CompetitionEditor extends StatefulWidget {
   const CompetitionEditor({this.competition, super.key});
 
@@ -368,6 +378,7 @@ class _CompetitionEditorState extends State<CompetitionEditor> {
           const SizedBox(height: 12),
           ListTile(
             contentPadding: EdgeInsets.zero,
+            // date_from: nem a jelentkezés kezdete, hanem a tagok listáján a megjelenés napja.
             title: const Text('Megjelenés a listában'),
             subtitle: Text(
               _from == null
@@ -427,6 +438,7 @@ class _CompetitionEditorState extends State<CompetitionEditor> {
             controller: _link,
             keyboardType: TextInputType.url,
             decoration: const InputDecoration(
+              // info_url. A HTML-leírást a lap nem menti, a régi szöveg a szerveren megmarad.
               labelText: 'Leírás linkje',
               hintText: 'https://pipaclub.hu/...',
             ),
@@ -475,6 +487,7 @@ class _CompetitionEditorState extends State<CompetitionEditor> {
   }
 }
 
+/// Alcsapat párbeszéd. Team nélkül új csapatot hoz létre.
 Future<void> editTeam(BuildContext context, {Team? team}) async {
   final name = TextEditingController(text: team?.name ?? '');
   final pos = TextEditingController(text: '${team?.pos ?? 0}');

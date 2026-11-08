@@ -1,3 +1,8 @@
+/*
+ * Lezárt versenyek, a legutóbbi versenyidő elöl.
+ *
+ * A tag linket lát a leíráshoz. Az elnök a canEdit mellett szerkesztheti is.
+ */
 import 'package:flutter/material.dart';
 
 import '../format.dart';
@@ -5,6 +10,7 @@ import '../models.dart';
 import '../widgets/common.dart';
 import 'editors.dart';
 
+/// Korábbi versenyek lapja. Az adat a megnyitáskor töltődik.
 class PastCompetitionsPage extends StatefulWidget {
   const PastCompetitionsPage({this.canEdit = false, super.key});
 
@@ -83,6 +89,7 @@ class _PastCompetitionsPageState extends State<PastCompetitionsPage> {
   }
 }
 
+/// Egy lezárt verseny neve, ideje és a leírás linkje.
 class _PastRow extends StatelessWidget {
   const _PastRow({required this.competition, required this.canEdit});
 

@@ -1,3 +1,9 @@
+/*
+ * Az alkalmazás állapota: belépés, téma, kezdőadatok, üzenetek.
+ *
+ * A képernyők az AppScope-on keresztül érik el. A Google azonosító tokent
+ * nem menti és nem írja ki nyersen, csak a szervernek küldi el egyszer.
+ */
 import 'dart:convert';
 
 import 'package:device_info_plus/device_info_plus.dart';
@@ -13,8 +19,13 @@ import '../config.dart';
 import '../format.dart';
 import '../models.dart';
 
+/// Android natív csatorna: a splash a mentett témával induljon.
 const _themeChannel = MethodChannel('hu.vzsfoto.teamreg/theme');
 
+/// Háttérfigyelés: ugyanaz az alkalmazás nézi az új flash üzeneteket.
+const _watchChannel = MethodChannel('hu.vzsfoto.teamreg/messages');
+
+/// Közös állapot. A notifyListeners rajzolja újra a feliratkozott képernyőket.
 class AppModel extends ChangeNotifier {
   AppModel({ApiClient? api, FlutterSecureStorage? storage})
     : _api = api ?? ApiClient(),
@@ -26,14 +37,28 @@ class AppModel extends ChangeNotifier {
   final FlutterSecureStorage _storage;
 
   ThemeMode themeMode = ThemeMode.system;
+
+  /// Hamis, amíg a mentett belépés és a téma nincs kész. Addig a splash látszik.
   bool ready = false;
+
+  /// Null, ha nincs belépve.
   UserProfile? user;
+
+  /// A Google-fiók profilképe, ha a szerver nem küld avatárt.
   String? photoUrl;
+
+  /// A szerephez tartozó kezdőlap adatai.
   HomeData? data;
   String? error;
   bool loading = false;
+
+  /// Egyszeri üzenet, például az elutasított jelentkezés szövege.
   String? notice;
+
+  /// A telefonra küldött üzenetek, a legújabb elöl.
   List<FlashNote> flashes = const [];
+
+  /// Üzenetből kért elnöki menüpont. A PresidentHome egyszer elolvassa, aztán törli.
   int? requestedSection;
 
   int get unreadFlashes => flashes.where((item) => item.unread).length;
@@ -48,6 +73,7 @@ class AppModel extends ChangeNotifier {
 
   String? get ownPhoto => sizedPhoto(photoUrl ?? user?.avatar, 256);
 
+  /// Indulás: téma, Google, mentett belépés, majd a kezdőlap.
   Future<void> bootstrap() async {
     await loadTheme();
     await _ensureGoogle();
@@ -59,6 +85,7 @@ class AppModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Google-belépés. Null a siker és a megszakítás. Szöveg a hiba.
   Future<String?> signInWithGoogle() async {
     if (!await _ensureGoogle()) {
       return 'A telefon Google-belépése ezen a készüléken nem elérhető.';
@@ -72,6 +99,7 @@ class AppModel extends ChangeNotifier {
       if (idToken == null || idToken.isEmpty) {
         return 'A Google nem adott azonosító tokent. Ellenőrizd a Google Cloud Android-kliensét.';
       }
+      // Csak a token eleje és hossza kerül a naplóba, a nyers token nem.
       debugPrint('Google token: ${_tokenTrace(idToken)}');
       final json = await _api.post('/auth/google.json', {
         'id_token': idToken,
@@ -115,6 +143,7 @@ class AppModel extends ChangeNotifier {
     }
   }
 
+  /// Kijelentkezés a szerveren és a telefonon. A téma megmarad.
   Future<void> logout() async {
     final refresh = _refreshToken;
     try {
@@ -135,6 +164,7 @@ class AppModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// A saját fiók és a kapcsolt adatok törlése, utána kijelentkezés.
   Future<void> deleteAccount() async {
     await _api.delete('/users/delete-account.json');
     await logout();
@@ -142,6 +172,7 @@ class AppModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Profil mentése. Új tagnál ez küldi el a jelentkezést, és szerepet is válthat.
   Future<UserProfile> saveProfile(Map<String, dynamic> body) async {
     final json = await _api.post('/users/profile.json', body);
     final profile = UserProfile.fromJson(asMap(json['user']));
@@ -150,6 +181,7 @@ class AppModel extends ChangeNotifier {
     return profile;
   }
 
+  /// Kezdőlap újratöltése. Az [initial] hiba esetén kiüríti a régi adatot.
   Future<void> loadHome({bool initial = false}) async {
     final current = user;
     if (current == null) {
@@ -202,6 +234,7 @@ class AppModel extends ChangeNotifier {
     }
   }
 
+  /// Üzenetek. A hiba nem töri el a kezdőlap többi adatát.
   Future<void> _fetchFlashes() async {
     if (user == null) {
       flashes = const [];
@@ -215,17 +248,20 @@ class AppModel extends ChangeNotifier {
     }
   }
 
+  /// Elnöki menüpont kérése üzenetből. 0 jelentkezők, 1 versenyek, 3 nevezők.
   void requestSection(int section) {
     requestedSection = section;
     notifyListeners();
   }
 
+  /// A kért menüpont egyszer olvasható, utána törlődik.
   int? takeSection() {
     final section = requestedSection;
     requestedSection = null;
     return section;
   }
 
+  /// Előtérbe kerüléskor megnézi, változott-e a szerep vagy a tagság.
   Future<void> refreshIdentity() async {
     if (user == null || _refreshToken == null) {
       return;
@@ -237,6 +273,7 @@ class AppModel extends ChangeNotifier {
     }
   }
 
+  /// A /auth/me.json frissíti a profilt. Szerepváltáskor a kezdőlapot is újratölti.
   Future<UserProfile> reloadMe() async {
     final me = await _api.get('/auth/me.json');
     final next = UserProfile.fromJson(asMap(me['user']));
@@ -252,6 +289,7 @@ class AppModel extends ChangeNotifier {
     return next;
   }
 
+  /// A jobb szélső gomb: a mostani fényerő ellentéte, és el is menti.
   Future<void> toggleTheme(Brightness brightness) async {
     themeMode = brightness == Brightness.dark ? ThemeMode.light : ThemeMode.dark;
     final prefs = await SharedPreferences.getInstance();
@@ -260,17 +298,20 @@ class AppModel extends ChangeNotifier {
     await _publishTheme();
   }
 
+  /// Az egyszeri figyelmeztetés bezárása.
   void clearNotice() {
     notice = null;
     notifyListeners();
   }
 
+  /// Tag kezdőlapja: látható, még nem lezárt versenyek, saját nevezések, névsor.
   Future<HomeData> _loadMember() async {
     final competitionsFuture = _api.pages('/competitions.json', 'competitions');
     final mineFuture = _api.get('/registrations/mine.json');
     final rosterFuture = _api.get('/registrations/roster.json');
     final meFuture = _api.get('/auth/me.json');
     final now = DateTime.now();
+    // A lezárt és a még meg nem jelent kiírás itt is kiesik, a szerver frissítése előtt is.
     final competitions = (await competitionsFuture)
         .map(Competition.fromJson)
         .where((row) => row.listedFor(now))
@@ -294,6 +335,7 @@ class AppModel extends ChangeNotifier {
     );
   }
 
+  /// Elnök és admin: jelentkezők, versenyek, nevezések, csapatok, taglista.
   Future<HomeData> _loadPresident() async {
     final competitionsFuture = _api.pages('/competitions.json', 'competitions');
     final registrationsFuture = _api.pages('/registrations.json', 'registrations');
@@ -305,7 +347,7 @@ class AppModel extends ChangeNotifier {
     final now = DateTime.now();
     final competitions = (await competitionsFuture)
         .map(Competition.fromJson)
-        .where((row) => !row.hasEnded(now))
+        .where((row) => !row.hasEnded(now)) // az elnök a jövőbeli megjelenésű kiírást is szerkeszti
         .toList();
     final registrations = (await registrationsFuture).map(Registration.fromJson).toList();
     final teamRows = await teamsFuture;
@@ -404,6 +446,7 @@ class AppModel extends ChangeNotifier {
     }
   }
 
+  /// Mentett téma. Üres értéknél a telefon rendszertémája.
   Future<void> loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
     themeMode = switch (prefs.getString('theme')) {
@@ -439,16 +482,20 @@ class AppModel extends ChangeNotifier {
     _accessExpires = expiry == null ? null : DateTime.fromMillisecondsSinceEpoch(expiry);
     _api.accessToken = await _storage.read(key: 'access_token');
     if (_refreshToken == null || _refreshToken!.isEmpty) {
+      await _syncWatch();
       return false;
     }
     final renewed = await _refresh();
     if (!renewed) {
+      await _syncWatch();
       return false;
     }
-    if (user != null) {
-      return true;
+    if (user == null && !await _loadMe()) {
+      await _syncWatch();
+      return false;
     }
-    return _loadMe();
+    await _syncWatch();
+    return true;
   }
 
   Future<bool> _refresh() {
@@ -521,6 +568,7 @@ class AppModel extends ChangeNotifier {
     if (photoUrl != null) {
       await _storage.write(key: 'photo_url', value: photoUrl);
     }
+    await _syncWatch();
   }
 
   Future<void> _clearSession() async {
@@ -533,8 +581,57 @@ class AppModel extends ChangeNotifier {
     await _storage.delete(key: 'refresh_token');
     await _storage.delete(key: 'access_expires');
     await _storage.delete(key: 'photo_url');
+    await _syncWatch();
   }
 
+  /// Belépve elindítja a telefonos figyelést, kijelentkezéskor leállítja.
+  Future<void> _syncWatch() async {
+    try {
+      final access = _api.accessToken;
+      final refresh = _refreshToken;
+      if (access == null || access.isEmpty || refresh == null || refresh.isEmpty || user == null) {
+        await _watchChannel.invokeMethod<void>('stopWatch');
+        return;
+      }
+      await _watchChannel.invokeMethod<void>('startWatch', {
+        'accessToken': access,
+        'refreshToken': refresh,
+        'baseUrl': ApiConfig.baseUrl,
+      });
+    } catch (error) {
+      debugPrint('Üzenetfigyelés: $error');
+    }
+  }
+
+  /// Az értesítésből nyitandó flash. Egyszer olvasható.
+  Future<FlashNote?> takeNotification() async {
+    try {
+      final raw = await _watchChannel.invokeMethod<dynamic>('takeOpen');
+      if (raw is! Map) {
+        return null;
+      }
+      final map = Map<String, dynamic>.from(raw);
+      final id = asText(map['id']);
+      if (id.isEmpty) {
+        return null;
+      }
+      final targetId = asText(map['targetId']);
+      return FlashNote(
+        id: id,
+        subject: asText(map['subject']),
+        body: asText(map['body']),
+        target: asText(map['target']).isEmpty ? 'message' : asText(map['target']),
+        targetId: targetId.isEmpty ? null : targetId,
+        seen: null,
+        created: null,
+      );
+    } catch (error) {
+      debugPrint('Üzenetnyitás: $error');
+      return null;
+    }
+  }
+
+  /// Új vagy meglévő nevezés. A csapatot csak az elnök küldi, [includeTeam] mellett.
   Future<void> saveRegistration({
     int? id,
     required int competitionId,
@@ -559,11 +656,13 @@ class AppModel extends ChangeNotifier {
     await loadHome();
   }
 
+  /// Nevezés visszavonása a határidő előtt.
   Future<void> withdrawRegistration(int id) async {
     await _api.delete('/registrations/$id.json');
     await loadHome();
   }
 
+  /// Csapatba sorolás. Saját nevezésnél a darabszámok is mennek, hogy ne vesszenek el.
   Future<void> assignTeam(Registration row, int? teamId) async {
     final body = <String, dynamic>{'team_id': teamId};
     if (row.userId == user?.id) {
@@ -574,6 +673,7 @@ class AppModel extends ChangeNotifier {
     await loadHome();
   }
 
+  /// Lezárt versenyek, a legutóbbi versenyidő elöl. 404, amíg a szerver nincs frissítve.
   Future<List<Competition>> loadPastCompetitions() async {
     try {
       final rows = await _api.pages('/competitions/past.json', 'competitions');
@@ -608,6 +708,7 @@ class AppModel extends ChangeNotifier {
     }
   }
 
+  /// Verseny létrehozása vagy mentése. A leírás helyett az info_url link megy.
   Future<void> saveCompetition(Map<String, dynamic> body, {int? id}) async {
     if (id == null) {
       await _api.post('/competitions.json', body);
@@ -617,6 +718,7 @@ class AppModel extends ChangeNotifier {
     await loadHome();
   }
 
+  /// Alcsapat létrehozása vagy átnevezése.
   Future<void> saveTeam({
     int? id,
     required String name,
@@ -632,6 +734,7 @@ class AppModel extends ChangeNotifier {
     await loadHome();
   }
 
+  /// Üzenet olvasottnak jelölése. A helyi lista akkor is frissül, ha a szerver még nem tudja.
   Future<void> markFlashSeen(String id) async {
     try {
       await _api.post('/flashes/$id/seen.json');
@@ -656,26 +759,61 @@ class AppModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Beszélgetések és a választható címzettek.
+  Future<MessageDesk> messageDesk() async {
+    final json = await _api.get('/messages.json');
+    return MessageDesk.fromJson(json);
+  }
+
+  /// Egy beszélgetés megnyitása. A [id] a flash target_id értéke.
+  Future<MessageThread> messageThread(String id) async {
+    final json = await _api.get('/messages/$id.json');
+    return MessageThread.fromJson(asMap(json['thread']));
+  }
+
+  /// Új üzenet egy tagnak vagy elnöknek. A címzett telefonján flashként jelenik meg.
+  Future<void> sendClubMessage({
+    required String recipientId,
+    required String subject,
+    required String body,
+  }) async {
+    await _api.post('/messages.json', {
+      'recipient_id': recipientId,
+      'subject': subject,
+      'body': body,
+    });
+  }
+
+  /// Válasz a beszélgetésre. A másik fél telefonjára flashként megy ki.
+  Future<void> replyClubMessage(String threadId, String body) async {
+    await _api.post('/messages/$threadId/reply.json', {'body': body});
+  }
+
+  /// Admin törli egy másik tag fiókját. Saját magát és másik admint a szerver utasítja el.
   Future<void> deleteMember(String id) async {
     await _api.delete('/users/$id.json');
     await loadHome();
   }
 
+  /// Tagból elnök, vagy elnökből tag. Admin és saját fiók nem váltható.
   Future<void> setMemberRole(String id, String role) async {
     await _api.post('/users/$id/role.json', {'role': role});
     await loadHome();
   }
 
+  /// Jelentkező elfogadása. A telefonján member célú üzenet nyitja a tagfelületet.
   Future<void> approveApplicant(String id) async {
     await _api.post('/applicants/$id/approve.json');
     await loadHome();
   }
 
+  /// Jelentkező elutasítása. A telefonján a kezdőlapra vivő üzenet jelenik meg.
   Future<void> denyApplicant(String id) async {
     await _api.post('/applicants/$id/deny.json');
     await loadHome();
   }
 
+  /// Egy tagnak emlékeztető a megadott versenyre. A szöveg a szerver válasza.
   Future<String> remindMember(String id, int competitionId) async {
     final json = await _api.post('/members/$id/remind.json', {'competition_id': competitionId});
     await loadHome();
@@ -683,6 +821,7 @@ class AppModel extends ChangeNotifier {
     return message.isEmpty ? 'Emlékeztető e-mail kiküldve.' : message;
   }
 
+  /// Emlékeztető mindenkinek, aki a versenyre még nem nevezett.
   Future<String> remindMissing(int competitionId) async {
     final json = await _api.post('/members/remind-missing.json', {
       'competition_id': competitionId,
@@ -722,6 +861,7 @@ class AppModel extends ChangeNotifier {
   }
 }
 
+/// Naplóhoz a token közönsége és kiállítója, a token és az e-mail nélkül.
 String _tokenTrace(String jwt) {
   try {
     final parts = jwt.split('.');
@@ -741,6 +881,7 @@ String _tokenTrace(String jwt) {
 
 bool _googleReady = false;
 
+/// A Google belépés egyszer áll be, a webes kliens azonosítójával.
 Future<bool> _ensureGoogle() async {
   if (_googleReady) {
     return true;

@@ -1,3 +1,7 @@
+/*
+ * A verseny helyszínét a telefon saját térképében nyitja, útvonaltervezéssel.
+ * Először a natív térkép, utána a Google Maps webes útvonala, végül a mentett link.
+ */
 import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 

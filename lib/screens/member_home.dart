@@ -1,3 +1,9 @@
+/*
+ * Klubtag kezdőlapja.
+ *
+ * Minden kiírt verseny saját kártya, alatta a jelentkezők. A leírás link,
+ * a lezárt versenyek a Korábbi versenyek lapon vannak.
+ */
 import 'package:flutter/material.dart';
 
 import '../format.dart';
@@ -6,6 +12,7 @@ import '../widgets/common.dart';
 import 'editors.dart';
 import 'past_competitions.dart';
 
+/// Címsor: Klubtag. A törzs a versenylista.
 class MemberHome extends StatelessWidget {
   const MemberHome({super.key});
 
@@ -29,6 +36,7 @@ class MemberHome extends StatelessWidget {
   }
 }
 
+/// Versenylista. Az elnök saját nevezése is ezt használja, névsor nélkül.
 class CompetitionBoard extends StatelessWidget {
   const CompetitionBoard({
     required this.competitions,
@@ -93,6 +101,7 @@ class CompetitionBoard extends StatelessWidget {
   }
 }
 
+/// Egy verseny: időpont, leírás linkje, térkép, jelentkezés vagy a saját nevezés.
 class _CompetitionCard extends StatelessWidget {
   const _CompetitionCard({required this.competition, required this.registration, required this.bandIndex});
 
@@ -149,6 +158,7 @@ class _CompetitionCard extends StatelessWidget {
   }
 }
 
+/// A versenyhez tartozó jelentkezők, csapat szerint.
 class _RosterBlock extends StatelessWidget {
   const _RosterBlock({required this.competition, required this.roster, required this.bandIndex});
 
@@ -188,6 +198,7 @@ class _RosterBlock extends StatelessWidget {
   }
 }
 
+/// Név és csapat a névsorban.
 class _RosterTile extends StatelessWidget {
   const _RosterTile({required this.line});
 

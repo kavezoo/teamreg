@@ -1,9 +1,18 @@
+/*
+ * Az alkalmazás belépési pontja.
+ *
+ * A téma a splash előtt betöltődik, utána a szerep választ képernyőt:
+ * nincs belépés → login, új tag → NewHome, tag → MemberHome,
+ * klubelnök és admin → PresidentHome.
+ */
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
+import 'screens/flashes.dart';
 import 'screens/login_screen.dart';
 import 'screens/member_home.dart';
+import 'screens/messages.dart';
 import 'screens/new_home.dart';
 import 'screens/president_home.dart';
 import 'screens/profile_page.dart';
@@ -14,10 +23,12 @@ import 'widgets/common.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final model = AppModel();
+  // A mentett világos/sötét mód a splash előtt érvényesül.
   await model.loadTheme();
   runApp(TeamRegApp(model: model));
 }
 
+/// A MaterialApp, a téma és a szerep szerinti kezdőképernyő.
 class TeamRegApp extends StatefulWidget {
   const TeamRegApp({required this.model, super.key});
 
@@ -29,6 +40,8 @@ class TeamRegApp extends StatefulWidget {
 
 class _TeamRegAppState extends State<TeamRegApp> with WidgetsBindingObserver {
   late final AppModel _model = widget.model;
+  final _navigatorKey = GlobalKey<NavigatorState>();
+  String? _watchedUser;
 
   @override
   void initState() {
@@ -46,9 +59,32 @@ class _TeamRegAppState extends State<TeamRegApp> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Előtérbe kerüléskor frissül a szerep, például ha közben elfogadták a jelentkezést.
     if (state == AppLifecycleState.resumed) {
       _model.refreshIdentity();
+      _consumeOpen();
     }
+  }
+
+  /// Értesítésből a beszélgetésre vagy az üzenetlistára visz.
+  Future<void> _consumeOpen() async {
+    final open = await _model.takeNotification();
+    if (!mounted || open == null) {
+      return;
+    }
+    final navigator = _navigatorKey.currentState;
+    if (navigator == null) {
+      return;
+    }
+    await _model.markFlashSeen(open.id);
+    final threadId = open.targetId;
+    if (open.target == 'message' && threadId != null && threadId.isNotEmpty) {
+      await navigator.push(
+        MaterialPageRoute<void>(builder: (context) => MessageThreadPage(threadId: threadId)),
+      );
+      return;
+    }
+    await navigator.push(MaterialPageRoute<void>(builder: (context) => const FlashesPage()));
   }
 
   @override
@@ -59,7 +95,15 @@ class _TeamRegAppState extends State<TeamRegApp> with WidgetsBindingObserver {
         listenable: _model,
         builder: (context, _) {
           final user = _model.user;
+          if (_model.ready && user != null && _watchedUser != user.id) {
+            _watchedUser = user.id;
+            WidgetsBinding.instance.addPostFrameCallback((_) => _consumeOpen());
+          }
+          if (user == null) {
+            _watchedUser = null;
+          }
           return MaterialApp(
+            navigatorKey: _navigatorKey,
             title: 'Ibafai Pipaklub',
             theme: ClubTheme.light(),
             darkTheme: ClubTheme.dark(),
@@ -78,6 +122,7 @@ class _TeamRegAppState extends State<TeamRegApp> with WidgetsBindingObserver {
               final light = theme.brightness == Brightness.light;
               final bar = theme.appBarTheme.backgroundColor ?? theme.colorScheme.surface;
               final background = theme.scaffoldBackgroundColor;
+              // Világos témán a rendszer sávok feketék, sötét témán a klub sáv színe.
               final systemBar = light ? Colors.black : bar;
               return AnnotatedRegion<SystemUiOverlayStyle>(
                 value: SystemUiOverlayStyle(
@@ -129,6 +174,7 @@ class _TeamRegAppState extends State<TeamRegApp> with WidgetsBindingObserver {
               '/profile': (context) => const ProfilePage(),
             },
             home: KeyedSubtree(
+              // Szerepváltáskor újraépül a kezdőképernyő, különben a régi home maradna.
               key: ValueKey(_model.ready ? '${user?.id ?? 'out'}:${user?.role ?? ''}' : 'splash'),
               child: _home(_model),
             ),
@@ -139,6 +185,7 @@ class _TeamRegAppState extends State<TeamRegApp> with WidgetsBindingObserver {
   }
 }
 
+/// Szerep szerinti kezdőképernyő. Az admin is a klubelnök felületét kapja.
 Widget _home(AppModel model) {
   if (!model.ready) {
     return const BrandSplash();

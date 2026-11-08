@@ -1,8 +1,15 @@
+/*
+ * Belépés Google-fiókkal.
+ *
+ * Nincs külön adatkezelési jelölőnégyzet: a gomb fölötti szöveg mondja,
+ * hogy a belépéssel a nyilatkozat elfogadott. A splash felirata itt sem jelenik meg.
+ */
 import 'package:flutter/material.dart';
 
 import '../privacy.dart';
 import '../widgets/common.dart';
 
+/// Google-gomb, hibaüzenet és a nyilatkozat megnyitása.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
 

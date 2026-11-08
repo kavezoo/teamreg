@@ -1,6 +1,13 @@
+/*
+ * A pipaklub világos és sötét témája.
+ *
+ * Barna és arany színek, a címke mindig a mező keretén lebeg,
+ * a hint dőlt, hogy ne látsszon begépelt értéknek.
+ */
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+/// Közös Material 3 téma a két fényerőhöz.
 class ClubTheme {
   static ThemeData light() => _build(Brightness.light);
 
@@ -53,6 +60,7 @@ class ClubTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: dark ? const Color(0xFF26211C) : const Color(0xFFFFFDF9),
+        // A felirat a keretre ül, a hint a mezőben marad példának.
         floatingLabelBehavior: FloatingLabelBehavior.always,
         contentPadding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
         labelStyle: TextStyle(

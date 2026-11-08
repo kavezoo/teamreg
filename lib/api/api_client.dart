@@ -1,3 +1,9 @@
+/*
+ * A teamreg.vzsfoto.hu JSON API hívásai.
+ *
+ * Minden kérés Bearer tokennel megy, a belépés kivételével.
+ * 401-nél egyszer megújítja a tokent, utána a szerver üzenetét adja vissza.
+ */
 import 'dart:async';
 import 'dart:convert';
 
@@ -6,6 +12,7 @@ import 'package:http/http.dart' as http;
 
 import '../config.dart';
 
+/// A szerver hibája, a felhasználónak szánt [message] szöveggel.
 class ApiException implements Exception {
   ApiException(this.message, {this.statusCode});
 
@@ -16,11 +23,16 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// GET, POST, PATCH és DELETE a /api-v1 útvonalakra. A törzs JSON.
 class ApiClient {
   ApiClient({http.Client? client}) : _client = client ?? http.Client();
 
   final http.Client _client;
+
+  /// Rövid életű belépési token. A [refresh] hosszabbítja meg.
   String? accessToken;
+
+  /// Lejárt tokennél az AppModel ezt hívja. Igaz, ha sikerült megújítani.
   Future<bool> Function()? refresh;
 
   Future<Map<String, dynamic>> get(String path) {
@@ -39,6 +51,7 @@ class ApiClient {
     return _send('DELETE', path);
   }
 
+  /// Lapozott lista. A [key] a JSON-tömb neve, legfeljebb 30 lap.
   Future<List<Map<String, dynamic>>> pages(String path, String key) async {
     final rows = <Map<String, dynamic>>[];
     var page = 1;
@@ -76,6 +89,7 @@ class ApiClient {
     bool retried = false,
   }) async {
     final response = await _request(method, path, body: body, auth: auth);
+    // Egy lejárt tokennél egyetlen újrapróbálás, hogy ne pörögjön a hurok.
     if (response.statusCode == 401 && auth && !retried && refresh != null) {
       final renewed = await refresh!();
       if (renewed) {

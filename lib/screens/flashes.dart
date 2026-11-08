@@ -1,21 +1,63 @@
+/*
+ * Telefonos üzenetek.
+ *
+ * A sáv a legújabb olvasatlant mutatja. A koppintás a target szerint
+ * a nevezésre, a nevezőkre, a versenyre, a jelentkezőkre vagy a profilra visz.
+ */
 import 'package:flutter/material.dart';
 
 import '../models.dart';
 import '../widgets/common.dart';
 import 'editors.dart';
+import 'messages.dart';
 
+/// Az összes üzenet. A showFlash hamis, hogy a sáv ne ismétlődjön a lista fölött.
 class FlashesPage extends StatelessWidget {
   const FlashesPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final flashes = AppScope.of(context).flashes;
+    final model = AppScope.of(context);
+    final flashes = model.flashes;
+    final canWrite = model.user != null && model.user!.isNew == false;
     return ClubScaffold(
       title: 'Üzenetek',
       showFlash: false,
-      body: flashes.isEmpty
-          ? const EmptyNote('Nincs üzenet.')
-          : ListView.builder(
+      body: Column(
+        children: [
+          if (canWrite)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(builder: (context) => const MessageDeskPage()),
+                        );
+                      },
+                      child: const Text('Beszélgetések'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(builder: (context) => const MessageComposePage()),
+                        );
+                      },
+                      child: const Text('Új üzenet'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          Expanded(
+            child: flashes.isEmpty
+                ? const EmptyNote('Nincs üzenet.')
+                : ListView.builder(
               padding: const EdgeInsets.fromLTRB(8, 8, 8, 32),
               itemCount: flashes.length,
               itemBuilder: (context, index) {
@@ -31,10 +73,14 @@ class FlashesPage extends StatelessWidget {
                 );
               },
             ),
+          ),
+        ],
+      ),
     );
   }
 }
 
+/// Olvasatlan üzenet sávja a címsor alatt. Többnél a „még N” jelzi a többit.
 class FlashBanner extends StatelessWidget {
   const FlashBanner({super.key});
 
@@ -70,6 +116,7 @@ class FlashBanner extends StatelessWidget {
   }
 }
 
+/// Olvasottnak jelöl, majd a céloldalra navigál.
 Future<void> openFlash(BuildContext context, FlashNote flash) async {
   final model = AppScope.of(context);
   final navigator = Navigator.of(context);
@@ -79,6 +126,7 @@ Future<void> openFlash(BuildContext context, FlashNote flash) async {
   }
   switch (flash.target) {
     case 'member':
+      // Elfogadott jelentkezés: a szerep taggá vált, a kezdőlap cserélődik.
       await model.reloadMe();
       if (context.mounted) {
         navigator.popUntil((route) => route.isFirst);
@@ -113,6 +161,13 @@ Future<void> openFlash(BuildContext context, FlashNote flash) async {
       await navigator.pushNamed('/profile');
       return;
     case 'message':
+      final threadId = flash.targetId;
+      if (threadId != null && threadId.isNotEmpty) {
+        await navigator.push(
+          MaterialPageRoute<void>(builder: (context) => MessageThreadPage(threadId: threadId)),
+        );
+        return;
+      }
       if (context.findAncestorWidgetOfExactType<FlashesPage>() == null) {
         await navigator.push(MaterialPageRoute<void>(builder: (context) => const FlashesPage()));
       }
@@ -127,6 +182,7 @@ Future<void> openFlash(BuildContext context, FlashNote flash) async {
   }
 }
 
+/// A besorolás üzenete a saját nevezés szerkesztőjét nyitja.
 Future<void> _openRegistration(BuildContext context, String? id) async {
   final model = AppScope.of(context);
   await model.loadHome();

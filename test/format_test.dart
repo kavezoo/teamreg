@@ -1,3 +1,7 @@
+/*
+ * A dátum, a térképcél, a névsor-sorrend és a HTML-szöveg ellenőrzése.
+ * Nem indít widgetet, csak a tiszta függvényeket hívja.
+ */
 import 'package:flutter_test/flutter_test.dart';
 import 'package:teamreg/format.dart';
 import 'package:teamreg/models.dart';
@@ -86,6 +90,7 @@ void main() {
   });
 }
 
+/// Látható tesztverseny a megadott versenyidővel.
 Competition _competition(int id, DateTime when) {
   return Competition(
     id: id,

@@ -1,5 +1,12 @@
+/*
+ * A szerver JSON-jából készült adatmodellek.
+ *
+ * A szerepek: new, member, president, admin. A CakeDC „user” szerepe is új tagnak számít.
+ * A first_name a vezetéknév, a last_name a keresztnév.
+ */
 import 'format.dart';
 
+/// Belépett felhasználó. A kezdőképernyőt a [role] választja.
 class UserProfile {
   const UserProfile({
     required this.id,
@@ -14,6 +21,8 @@ class UserProfile {
     required this.enabled,
     required this.mail,
     required this.mailChoices,
+    required this.flash,
+    required this.flashChoices,
     this.avatar,
     this.tosDate,
   });
@@ -21,18 +30,44 @@ class UserProfile {
   final String id;
   final String username;
   final String email;
+
+  /// Vezetéknév. A mező neve a szerveren first_name.
   final String firstName;
+
+  /// Keresztnév. A mező neve a szerveren last_name.
   final String lastName;
+
+  /// Megjelenő név. Ha üres, a vezetéknév és a keresztnév, majd az e-mail.
   final String name;
+
+  /// new, member, president vagy admin. Ismeretlen érték új tagnak számít.
   final String role;
+
+  /// null, pending vagy denied. A pending az elbírálásra váró jelentkezés.
   final String? membershipRequest;
+
+  /// A profil legalább egyszer el lett mentve, azzal indul a jelentkezés.
   final bool profileSaved;
+
+  /// A klubelnök letilthatja a belépést.
   final bool enabled;
+  /// Melyik e-mail-fajtát kéri a tag. A kulcs a szerver mail-kódja.
   final Map<String, bool> mail;
+
+  /// A kapcsolók felirata, a szerver szövegével.
   final Map<String, String> mailChoices;
+
+  /// Melyik telefonos üzenetet kéri. A kulcs a szerver flash-kódja.
+  final Map<String, bool> flash;
+
+  /// A telefonos kapcsolók felirata.
+  final Map<String, String> flashChoices;
   final String? avatar;
+
+  /// Az adatkezelési nyilatkozat elfogadásának ideje. Nullánál még nincs elfogadva.
   final DateTime? tosDate;
 
+  /// Tag, elnök és admin kívül mindenki új jelentkező, a CakeDC „user” szerepe is.
   bool get isNew => role != 'member' && role != 'president' && role != 'admin';
   bool get privacyAccepted => tosDate != null;
   bool get isMember => role == 'member';
@@ -61,6 +96,14 @@ class UserProfile {
     for (final entry in asMap(json['mail_choices']).entries) {
       choices[entry.key] = asText(entry.value);
     }
+    final flash = <String, bool>{};
+    for (final entry in asMap(json['flash']).entries) {
+      flash[entry.key] = asBool(entry.value, fallback: true);
+    }
+    final flashChoices = <String, String>{};
+    for (final entry in asMap(json['flash_choices']).entries) {
+      flashChoices[entry.key] = asText(entry.value);
+    }
     final avatar = asText(json['avatar']);
     return UserProfile(
       id: asText(json['id']),
@@ -75,12 +118,15 @@ class UserProfile {
       enabled: asBool(json['enabled'], fallback: true),
       mail: mail,
       mailChoices: choices,
+      flash: flash,
+      flashChoices: flashChoices,
       avatar: avatar.isEmpty ? null : avatar,
       tosDate: asDate(json['tos_date']),
     );
   }
 }
 
+/// Kiírt verseny. A leírás HTML helyett a [infoUrl] pipaclub.hu linkje számít.
 class Competition {
   const Competition({
     required this.id,
@@ -102,13 +148,27 @@ class Competition {
   final int id;
   final String name;
   final String comment;
+
+  /// Régi HTML-leírás. Megjelenítésre már a [infoLink] szolgál.
   final String description;
   final String descriptionHtml;
+
+  /// A pipaclub.hu-n közzétett versenykiírás címe.
   final String? infoUrl;
+
+  /// Helyszín, Google Maps vagy más http(s) link.
   final String? mapUrl;
+
+  /// A verseny kezdete. Ha ez elmúlt, a kiírás a korábbi versenyek közé kerül.
   final DateTime? dateCompetition;
+
+  /// Megjelenés a listában: a tag ettől a naptól látja a kiírást.
   final DateTime? dateFrom;
+
+  /// Jelentkezési határidő. A határidő napja még nyitott.
   final DateTime? dateDeadline;
+
+  /// Bekapcsolva a tag jelentkezhet. Kikapcsolva csak az elnök látja szerkesztésre.
   final bool visible;
   final int pos;
   final DateTime? created;
@@ -141,6 +201,7 @@ class Competition {
     return null;
   }
 
+  /// A versenyidő elmúlt. Időpont nélkül a kiírás még aktuális.
   bool hasEnded(DateTime now) {
     final when = dateCompetition?.toLocal();
     if (when == null) {
@@ -216,6 +277,7 @@ class Competition {
   }
 }
 
+/// Egy tag nevezése egy versenyre, a kért darabszámokkal és a csapatával.
 class Registration {
   const Registration({
     required this.id,
@@ -294,6 +356,7 @@ class Registration {
   }
 }
 
+/// A tagoknak szóló névsor egy sora: név, csapat, verseny.
 class RosterLine {
   const RosterLine({
     required this.name,
@@ -321,6 +384,7 @@ class RosterLine {
   }
 }
 
+/// Alcsapat. A [pos] a névsor csoportjainak sorrendje.
 class Team {
   const Team({
     required this.id,
@@ -344,6 +408,7 @@ class Team {
   }
 }
 
+/// Elbírálásra váró új tag. Az elnök engedélyezi vagy elutasítja.
 class Applicant {
   const Applicant({
     required this.id,
@@ -371,6 +436,7 @@ class Applicant {
   }
 }
 
+/// Tag vagy elnök a szervezői listán, a legközelebbi verseny nevezésével.
 class ClubMember {
   const ClubMember({
     required this.id,
@@ -407,6 +473,7 @@ class ClubMember {
   }
 }
 
+/// A taglista egy versenyhez kötve: ki nevezett, ki hiányzik, kinek ment emlékeztető.
 class MembersSnapshot {
   const MembersSnapshot({
     required this.competitionId,
@@ -436,6 +503,7 @@ class MembersSnapshot {
   }
 }
 
+/// A kezdőképernyő egyben letöltött adatai. Szerepenként más mezők telnek meg.
 class HomeData {
   const HomeData({
     required this.competitions,
@@ -463,6 +531,7 @@ class HomeData {
   );
 }
 
+/// Vezetéknév és keresztnév. Ha nincs név, az e-mail, végül a felhasználónév.
 String displayName(Map<String, dynamic> user) {
   if (user.isEmpty) {
     return '';
@@ -486,6 +555,10 @@ String? _nullable(dynamic value) {
   return text;
 }
 
+/*
+ * Telefonos üzenet. A [target] mondja meg, hova visz a koppintás:
+ * member, registration, roster, competition, applicants, profile, message, home.
+ */
 class FlashNote {
   const FlashNote({
     required this.id,
@@ -520,6 +593,140 @@ class FlashNote {
   }
 }
 
+/// Beszélgetés a listában. Az [id] a szál, erre visz a flash koppintása.
+class MessagePreview {
+  const MessagePreview({
+    required this.id,
+    required this.subject,
+    required this.peerName,
+    required this.lastBody,
+    required this.lastAt,
+    required this.mineLast,
+  });
+
+  final String id;
+  final String subject;
+  final String peerName;
+  final String lastBody;
+  final String lastAt;
+  final bool mineLast;
+
+  factory MessagePreview.fromJson(Map<String, dynamic> json) {
+    return MessagePreview(
+      id: asText(json['id']),
+      subject: asText(json['subject']),
+      peerName: asText(json['peer_name']),
+      lastBody: asText(json['last_body']),
+      lastAt: asText(json['last_at']),
+      mineLast: asBool(json['mine_last']),
+    );
+  }
+}
+
+/// Akinek üzenetet lehet küldeni.
+class MessagePeer {
+  const MessagePeer({required this.id, required this.name, required this.role});
+
+  final String id;
+  final String name;
+  final String role;
+
+  String get label {
+    switch (role) {
+      case 'president':
+        return '$name (elnök)';
+      case 'admin':
+        return '$name (admin)';
+      default:
+        return name;
+    }
+  }
+
+  factory MessagePeer.fromJson(Map<String, dynamic> json) {
+    return MessagePeer(
+      id: asText(json['id']),
+      name: asText(json['name']),
+      role: asText(json['role']),
+    );
+  }
+}
+
+/// A beszélgetések és a választható címzettek.
+class MessageDesk {
+  const MessageDesk({required this.threads, required this.recipients});
+
+  final List<MessagePreview> threads;
+  final List<MessagePeer> recipients;
+
+  factory MessageDesk.fromJson(Map<String, dynamic> json) {
+    return MessageDesk(
+      threads: [
+        for (final item in asList(json['threads']))
+          if (item is Map) MessagePreview.fromJson(asMap(item)),
+      ],
+      recipients: [
+        for (final item in asList(json['recipients']))
+          if (item is Map) MessagePeer.fromJson(asMap(item)),
+      ],
+    );
+  }
+}
+
+/// Egy sor a beszélgetésben.
+class MessagePost {
+  const MessagePost({
+    required this.id,
+    required this.senderName,
+    required this.body,
+    required this.mine,
+    required this.created,
+  });
+
+  final String id;
+  final String senderName;
+  final String body;
+  final bool mine;
+  final String created;
+
+  factory MessagePost.fromJson(Map<String, dynamic> json) {
+    return MessagePost(
+      id: asText(json['id']),
+      senderName: asText(json['sender_name']),
+      body: asText(json['body']),
+      mine: asBool(json['mine']),
+      created: asText(json['created']),
+    );
+  }
+}
+
+/// A megnyitott beszélgetés, a válaszokkal.
+class MessageThread {
+  const MessageThread({
+    required this.id,
+    required this.subject,
+    required this.peerName,
+    required this.posts,
+  });
+
+  final String id;
+  final String subject;
+  final String peerName;
+  final List<MessagePost> posts;
+
+  factory MessageThread.fromJson(Map<String, dynamic> json) {
+    return MessageThread(
+      id: asText(json['id']),
+      subject: asText(json['subject']),
+      peerName: asText(json['peer_name']),
+      posts: [
+        for (final item in asList(json['posts']))
+          if (item is Map) MessagePost.fromJson(asMap(item)),
+      ],
+    );
+  }
+}
+
+/// A legközelebbi látható, még el nem múlt verseny. A tesztek ezt használják.
 Competition? currentRosterCompetition(List<Competition> competitions, [DateTime? now]) {
   final clock = now ?? DateTime.now();
   Competition? current;

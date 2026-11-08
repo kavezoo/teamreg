@@ -1,8 +1,15 @@
+/*
+ * Admin: tag vagy elnök törlése külön listából.
+ *
+ * A menüpont csak adminnál látszik. Saját fiók és másik admin nem szerepel,
+ * a szerver ezeket a törléseket amúgy is visszautasítja.
+ */
 import 'package:flutter/material.dart';
 
 import '../models.dart';
 import '../widgets/common.dart';
 
+/// Törölhető tagok. A sor megerősítést kér, mielőtt a fiók megszűnik.
 class DeleteMembersPage extends StatelessWidget {
   const DeleteMembersPage({super.key});
 
@@ -39,6 +46,7 @@ class DeleteMembersPage extends StatelessWidget {
   }
 }
 
+/// Egy tag sora a törlés gombbal.
 class _DeleteRow extends StatefulWidget {
   const _DeleteRow({required this.member});
 

@@ -1,3 +1,12 @@
+/*
+ * JSON-olvasók, dátumformák és a névsor rendezése.
+ *
+ * A verseny űrlapján a címmező (lunch_title) és a darabszám (lunch_count)
+ * párosban jár. A megjelenített dátum magyar (2026. 11. 08.),
+ * az API felé küldött pedig 2026-11-08.
+ */
+
+/// Kiírás címe → a nevezésben tárolt darabszám mezője.
 const titledCounts = <String, String>{
   'lunch_title': 'lunch_count',
   'special_lunch_title': 'extra_lunch_count',
@@ -9,6 +18,7 @@ const titledCounts = <String, String>{
   'extra_title_3': 'extra_count_3',
 };
 
+/// Új verseny alap címei, ha az elnök nem ír mást.
 const titleDefaults = <String, String>{
   'lunch_title': 'Kísérő ebéd igény',
   'special_lunch_title': 'Extra ebéd igény',
@@ -17,11 +27,13 @@ const titleDefaults = <String, String>{
   'extra_title_1': 'Extra ebéd igény (érzékenység)',
 };
 
+/// Elutasított új tag kijelentkeztető szövege.
 const deniedNotice =
     'A klubelnök elutasította a jelentkezésedet. Kijelentkeztetünk. '
     'Ha később mégis tag szeretnél lenni, jelentkezz be újra ugyanazzal a Google-fiókkal, '
     'és mentsd el a profilodat. A mentés újra elküldi a jelentkezést a klubelnöknek.';
 
+/// API-szám: int, num vagy szám-szöveg. Hibás értéknél [fallback].
 int asInt(dynamic value, {int fallback = 0}) {
   if (value is int) {
     return value;
@@ -35,6 +47,7 @@ int asInt(dynamic value, {int fallback = 0}) {
   return int.tryParse(value.toString()) ?? fallback;
 }
 
+/// API-logikai: true/false, 1/0, illetve a „true” és „false” szöveg.
 bool asBool(dynamic value, {bool fallback = false}) {
   if (value is bool) {
     return value;
@@ -54,6 +67,7 @@ bool asBool(dynamic value, {bool fallback = false}) {
   return fallback;
 }
 
+/// Nullából üres szöveg, minden másból a toString értéke.
 String asText(dynamic value) {
   if (value == null) {
     return '';
@@ -61,6 +75,7 @@ String asText(dynamic value) {
   return value.toString();
 }
 
+/// Beágyazott JSON-objektum. Más típusnál üres map.
 Map<String, dynamic> asMap(dynamic value) {
   if (value is Map<String, dynamic>) {
     return value;
@@ -71,6 +86,7 @@ Map<String, dynamic> asMap(dynamic value) {
   return {};
 }
 
+/// JSON-tömb. Ha nem lista jött, üres lista.
 List<dynamic> asList(dynamic value) {
   if (value is List) {
     return value;
@@ -78,6 +94,7 @@ List<dynamic> asList(dynamic value) {
   return const [];
 }
 
+/// „2026-11-08” és „2026-11-08 18:00:00” is DateTime lesz. Üresnél null.
 DateTime? asDate(dynamic value) {
   if (value == null) {
     return null;
@@ -89,6 +106,7 @@ DateTime? asDate(dynamic value) {
   return DateTime.tryParse(text.replaceFirst(' ', 'T'));
 }
 
+/// Képernyőre: 2026. 11. 08. Üresnél „nincs megadva”.
 String formatDate(DateTime? value) {
   if (value == null) {
     return 'nincs megadva';
@@ -99,6 +117,7 @@ String formatDate(DateTime? value) {
   return '${local.year}. $month. $day.';
 }
 
+/// Képernyőre, órával: 2026. 11. 08. 18:00
 String formatDateTime(DateTime? value) {
   if (value == null) {
     return 'nincs megadva';
@@ -109,6 +128,7 @@ String formatDateTime(DateTime? value) {
   return '${formatDate(local)} $hour:$minute';
 }
 
+/// API-nak küldött nap: 2026-11-08
 String? apiDate(DateTime? value) {
   if (value == null) {
     return null;
@@ -119,6 +139,7 @@ String? apiDate(DateTime? value) {
   return '${local.year}-$month-$day';
 }
 
+/// API-nak küldött időpont, másodperccel: 2026-11-08 18:00:00
 String? apiDateTime(DateTime? value) {
   if (value == null) {
     return null;
@@ -155,6 +176,7 @@ int compareByAssignment({
   if (assigned != otherAssigned) {
     return assigned ? -1 : 1;
   }
+  // Besorolatlan a lista végére kerül, a csoportok a pos szerint állnak.
   final pos = assigned ? (teamPos ?? 0) : 1 << 30;
   final otherPos = otherAssigned ? (otherTeamPos ?? 0) : 1 << 30;
   final byPos = pos.compareTo(otherPos);
@@ -168,6 +190,7 @@ int compareByAssignment({
   return name.toLowerCase().compareTo(otherName.toLowerCase());
 }
 
+/// Régi HTML-leírásból olvasható szöveg. A sortörő címkéket megtartja.
 String plainText(String? html) {
   if (html == null || html.trim().isEmpty) {
     return '';
@@ -189,6 +212,7 @@ String plainText(String? html) {
   return decoded.replaceAll(RegExp(r'[ \t]+\n'), '\n').replaceAll(RegExp(r'\n{3,}'), '\n\n').trim();
 }
 
+/// Google-profilkép kért méretben. A =s96 végét =s128-c-re cseréli.
 String? sizedPhoto(String? url, int size) {
   if (url == null || url.trim().isEmpty) {
     return null;
@@ -216,6 +240,7 @@ String mapDestination(String url) {
   if (query != null && query.trim().isNotEmpty) {
     return query.trim();
   }
+  // Google Maps @lat,lng vagy a !3dlat!4dlng pin.
   final at = RegExp(r'@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)').firstMatch(url);
   if (at != null) {
     return '${at.group(1)},${at.group(2)}';
@@ -231,6 +256,7 @@ String mapDestination(String url) {
   return url.trim();
 }
 
+/// Csak http és https cím nyitható böngészőben vagy térképen.
 bool httpUrl(String value) {
   return RegExp(r'^https?://', caseSensitive: false).hasMatch(value.trim());
 }

@@ -1,3 +1,9 @@
+/*
+ * Közös felület: állapothozzáférés, címsor, kártya, csíkozott sor, splash.
+ *
+ * A ClubScaffold a címsor, a csengő és a téma gomb. A Band minden második
+ * sort eltérő háttérrel és vékony választóvonallal rajzolja.
+ */
 import 'package:flutter/material.dart';
 import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -6,6 +12,7 @@ import '../format.dart';
 import '../screens/flashes.dart';
 import '../state/app_model.dart';
 
+/// Az AppModel elérése a fából: AppScope.of(context).
 class AppScope extends InheritedNotifier<AppModel> {
   const AppScope({required AppModel model, required super.child, super.key}) : super(notifier: model);
 
@@ -16,12 +23,14 @@ class AppScope extends InheritedNotifier<AppModel> {
   }
 }
 
+/// Fehér logo sötét háttérre, fekete logo világos háttérre.
 String clubLogoAsset({required bool onDarkBackground}) {
   return onDarkBackground
       ? 'assets/branding/logo_feher_fekete_hatterhez.png'
       : 'assets/branding/logo_fekete_feher_hatterhez.png';
 }
 
+/// Egyetlen indítóképernyő: logo és arany pörgettyű, felirat nélkül.
 class BrandSplash extends StatelessWidget {
   const BrandSplash({super.key});
 
@@ -53,6 +62,7 @@ class BrandSplash extends StatelessWidget {
   }
 }
 
+/// Kis logo a címsorban és a belépőn.
 class ClubMark extends StatelessWidget {
   const ClubMark({this.size = 36, this.onDarkBackground, super.key});
 
@@ -71,6 +81,7 @@ class ClubMark extends StatelessWidget {
   }
 }
 
+/// Profilkép, vagy a név kezdőbetűje, ha nincs kép.
 class UserAvatar extends StatelessWidget {
   const UserAvatar({required this.name, this.url, this.radius = 18, super.key});
 
@@ -96,6 +107,7 @@ class UserAvatar extends StatelessWidget {
   }
 }
 
+/// A címsor jobb szélső gombja: világos és sötét téma.
 class ThemeToggleButton extends StatelessWidget {
   const ThemeToggleButton({this.onDarkBar = false, super.key});
 
@@ -114,6 +126,7 @@ class ThemeToggleButton extends StatelessWidget {
   }
 }
 
+/// Közös váz: címsor logóval, üzenetcsengő, téma, és a legújabb olvasatlan sáv.
 class ClubScaffold extends StatelessWidget {
   const ClubScaffold({
     required this.title,
@@ -203,6 +216,7 @@ class ClubScaffold extends StatelessWidget {
   }
 }
 
+/// Lista sor: páros és páratlan háttér, alul vékony választóvonal.
 class Band extends StatelessWidget {
   const Band({required this.index, required this.child, super.key});
 
@@ -223,6 +237,7 @@ class Band extends StatelessWidget {
   }
 }
 
+/// Külső böngésző. A verseny leírásának pipaclub.hu linkje ide megy.
 Future<void> openInBrowser(BuildContext context, String url) async {
   final uri = Uri.tryParse(url.trim());
   if (uri == null || !(uri.isScheme('http') || uri.isScheme('https'))) {
@@ -241,6 +256,7 @@ Future<void> openInBrowser(BuildContext context, String url) async {
   }
 }
 
+/// Kerek kártya címmel. A [bandIndex] csíkot tesz a kártyák közé.
 class SectionCard extends StatelessWidget {
   const SectionCard({required this.child, this.title, this.trailing, this.bandIndex, super.key});
 
@@ -290,6 +306,7 @@ class SectionCard extends StatelessWidget {
   }
 }
 
+/// Üres lista szövege.
 class EmptyNote extends StatelessWidget {
   const EmptyNote(this.text, {super.key});
 
@@ -304,6 +321,7 @@ class EmptyNote extends StatelessWidget {
   }
 }
 
+/// Betöltési hiba és újrapróbálás.
 class LoadProblem extends StatelessWidget {
   const LoadProblem({required this.message, required this.onRetry, super.key});
 
@@ -330,6 +348,7 @@ class LoadProblem extends StatelessWidget {
   }
 }
 
+/// Megerősítő párbeszéd. Igaz, ha a jobb gombot nyomták.
 Future<bool> confirmAction(
   BuildContext context, {
   required String title,
@@ -360,10 +379,12 @@ Future<bool> confirmAction(
   return result == true;
 }
 
+/// Rövid üzenet a képernyő alján.
 void showMessage(BuildContext context, String message) {
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
 }
 
+/// Régi HTML megjelenítése. Az új kiírások linket használnak helyette.
 class HtmlBlock extends StatelessWidget {
   const HtmlBlock({required this.html, super.key});
 
@@ -393,6 +414,7 @@ class HtmlBlock extends StatelessWidget {
   }
 }
 
+/// ApiException szövege, más hibánál általános mondat.
 String friendlyError(Object error) {
   final text = error.toString().replaceFirst('ApiException: ', '').trim();
   if (text.isEmpty) {

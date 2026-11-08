@@ -1,8 +1,15 @@
+/*
+ * Új tag kezdőlapja, amíg a klubelnök el nem fogadja.
+ *
+ * Az első mentés előtt magától nyitja a profilt. Mentés, függő vagy
+ * elutasított állapot után már nem, különben a mentés után visszanyílna az űrlap.
+ */
 import 'package:flutter/material.dart';
 
 import '../format.dart';
 import '../widgets/common.dart';
 
+/// Teendők: profil mentése, várakozás az elfogadásra, vagy elutasítás.
 class NewHome extends StatefulWidget {
   const NewHome({super.key});
 
@@ -26,6 +33,7 @@ class _NewHomeState extends State<NewHome> {
       return;
     }
     final user = AppScope.of(context).user;
+    // Mentett, várakozó vagy elutasított profilnál nem nyílik újra az űrlap.
     if (user == null || user.denied || user.profileSaved || user.membershipRequest == 'pending') {
       return;
     }

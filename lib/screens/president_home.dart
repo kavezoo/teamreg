@@ -1,3 +1,10 @@
+/*
+ * Klubelnök és admin kezdőlapja, hamburger menüvel.
+ *
+ * A menüpontok sorrendje a _section indexe:
+ * 0 jelentkezők, 1 versenyek, 2 saját nevezés, 3 nevezők, 4 tagok, 5 alcsapatok.
+ * Alapból a nevezők nyílik. Jelentkezőnél a jelentkezők, mert ott kell engedélyezni vagy tiltani.
+ */
 import 'package:flutter/material.dart';
 
 import '../format.dart';
@@ -8,6 +15,7 @@ import 'editors.dart';
 import 'member_home.dart';
 import 'past_competitions.dart';
 
+/// Elnöki váz. Az admin címe Admin, különben Klubelnök.
 class PresidentHome extends StatefulWidget {
   const PresidentHome({super.key});
 
@@ -18,7 +26,10 @@ class PresidentHome extends StatefulWidget {
 class _PresidentHomeState extends State<PresidentHome> {
   static const _sections = ['Jelentkezők', 'Versenyek', 'Nevezésem', 'Nevezők', 'Tagok', 'Alcsapatok'];
 
+  /// 3 = Nevezők, ez a szokásos kezdőlap.
   int _section = 3;
+
+  /// Az első betöltés után dől el, kell-e a jelentkezők lapja.
   bool _pickedStart = false;
 
   @override
@@ -51,6 +62,7 @@ class _PresidentHomeState extends State<PresidentHome> {
       );
     }
     final home = data ?? HomeData.empty;
+    // Üzenetből kért lapot nem írjuk felül. Várakozó jelentkezőnél a 0-s lap kell.
     if (!_pickedStart && data != null && model.requestedSection == null) {
       _pickedStart = true;
       if (data.applicants.isNotEmpty) {
@@ -128,6 +140,7 @@ class _PresidentHomeState extends State<PresidentHome> {
   }
 }
 
+/// Lehúzható lista, ami a kezdőlapot újratölti.
 class _Refresh extends StatelessWidget {
   const _Refresh({required this.children});
 
@@ -146,6 +159,7 @@ class _Refresh extends StatelessWidget {
   }
 }
 
+/// Elbírálásra váró jelentkezők. Üresen a nevezők a kezdőlap.
 class _Applicants extends StatelessWidget {
   const _Applicants({required this.data});
 
@@ -165,6 +179,7 @@ class _Applicants extends StatelessWidget {
   }
 }
 
+/// Egy jelentkező: engedélyezés vagy tiltás.
 class _ApplicantCard extends StatefulWidget {
   const _ApplicantCard({required this.applicant, required this.bandIndex});
 
@@ -239,6 +254,7 @@ class _ApplicantCardState extends State<_ApplicantCard> {
   }
 }
 
+/// Aktuális versenyek, szerkesztéssel és új kiírással.
 class _Competitions extends StatelessWidget {
   const _Competitions({required this.data});
 
@@ -271,6 +287,7 @@ class _Competitions extends StatelessWidget {
   }
 }
 
+/// Verseny sora: időpont, link, szerkesztés.
 class _CompetitionRow extends StatelessWidget {
   const _CompetitionRow({required this.competition, required this.data, required this.bandIndex});
 
@@ -319,6 +336,7 @@ class _CompetitionRow extends StatelessWidget {
   }
 }
 
+/// Nevezők versenyenként, csapatba sorolással.
 class _Groups extends StatelessWidget {
   const _Groups({required this.data});
 
@@ -364,6 +382,7 @@ class _Groups extends StatelessWidget {
   }
 }
 
+/// Egy verseny nevezőlistája.
 class _Group extends StatelessWidget {
   const _Group({required this.competitionId, required this.rows, required this.data});
 
@@ -404,6 +423,7 @@ class _Group extends StatelessWidget {
   }
 }
 
+/// Nevező és a csapat legördülője.
 class _AssignRow extends StatefulWidget {
   const _AssignRow({required this.row, required this.teams});
 
@@ -462,6 +482,7 @@ class _AssignRowState extends State<_AssignRow> {
   }
 }
 
+/// Tagok, emlékeztetővel és elnökké nevezéssel.
 class _Members extends StatelessWidget {
   const _Members({required this.data});
 
@@ -517,6 +538,7 @@ class _Members extends StatelessWidget {
   }
 }
 
+/// Tag sora: szerepváltás és emlékeztető.
 class _MemberRow extends StatefulWidget {
   const _MemberRow({required this.member, required this.competitionId});
 
@@ -623,6 +645,7 @@ class _MemberRowState extends State<_MemberRow> {
   }
 }
 
+/// Alcsapatok sorrendje és láthatósága.
 class _Teams extends StatelessWidget {
   const _Teams({required this.data});
 
