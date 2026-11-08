@@ -33,6 +33,10 @@ class AppModel extends ChangeNotifier {
   String? error;
   bool loading = false;
   String? notice;
+  List<FlashNote> flashes = const [];
+  int? requestedSection;
+
+  int get unreadFlashes => flashes.where((item) => item.unread).length;
 
   String? _refreshToken;
   DateTime? _accessExpires;
@@ -192,9 +196,34 @@ class AppModel extends ChangeNotifier {
         data = null;
       }
     } finally {
+      await _fetchFlashes();
       loading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> _fetchFlashes() async {
+    if (user == null) {
+      flashes = const [];
+      return;
+    }
+    try {
+      final json = await _api.get('/flashes.json');
+      flashes = asList(json['flashes']).map((item) => FlashNote.fromJson(asMap(item))).toList();
+    } catch (error) {
+      debugPrint('Flash üzenetek: $error');
+    }
+  }
+
+  void requestSection(int section) {
+    requestedSection = section;
+    notifyListeners();
+  }
+
+  int? takeSection() {
+    final section = requestedSection;
+    requestedSection = null;
+    return section;
   }
 
   Future<void> refreshIdentity() async {
@@ -216,6 +245,9 @@ class AppModel extends ChangeNotifier {
     notifyListeners();
     if (changed) {
       await loadHome(initial: true);
+    } else {
+      await _fetchFlashes();
+      notifyListeners();
     }
     return next;
   }
@@ -238,7 +270,11 @@ class AppModel extends ChangeNotifier {
     final mineFuture = _api.get('/registrations/mine.json');
     final rosterFuture = _api.get('/registrations/roster.json');
     final meFuture = _api.get('/auth/me.json');
-    final competitions = (await competitionsFuture).map(Competition.fromJson).toList();
+    final now = DateTime.now();
+    final competitions = (await competitionsFuture)
+        .map(Competition.fromJson)
+        .where((row) => row.listedFor(now))
+        .toList();
     final mineJson = await mineFuture;
     final rosterJson = await rosterFuture;
     user = UserProfile.fromJson(asMap((await meFuture)['user']));
@@ -266,7 +302,11 @@ class AppModel extends ChangeNotifier {
     final membersFuture = _members();
     final mineFuture = _api.get('/registrations/mine.json');
     final meFuture = _api.get('/auth/me.json');
-    final competitions = (await competitionsFuture).map(Competition.fromJson).toList();
+    final now = DateTime.now();
+    final competitions = (await competitionsFuture)
+        .map(Competition.fromJson)
+        .where((row) => !row.hasEnded(now))
+        .toList();
     final registrations = (await registrationsFuture).map(Registration.fromJson).toList();
     final teamRows = await teamsFuture;
     final applicantsJson = await applicantsFuture;
@@ -534,6 +574,40 @@ class AppModel extends ChangeNotifier {
     await loadHome();
   }
 
+  Future<List<Competition>> loadPastCompetitions() async {
+    try {
+      final rows = await _api.pages('/competitions/past.json', 'competitions');
+      final list = rows.map(Competition.fromJson).toList();
+      list.sort((a, b) {
+        final left = a.dateCompetition;
+        final right = b.dateCompetition;
+        if (left == null && right == null) {
+          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+        }
+        if (left == null) {
+          return 1;
+        }
+        if (right == null) {
+          return -1;
+        }
+        final byDate = right.compareTo(left);
+        if (byDate != 0) {
+          return byDate;
+        }
+        return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
+      return list;
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) {
+        throw ApiException(
+          'A korábbi versenyek listája a szerver frissítése után érhető el.',
+          statusCode: 404,
+        );
+      }
+      rethrow;
+    }
+  }
+
   Future<void> saveCompetition(Map<String, dynamic> body, {int? id}) async {
     if (id == null) {
       await _api.post('/competitions.json', body);
@@ -555,6 +629,35 @@ class AppModel extends ChangeNotifier {
     } else {
       await _api.patch('/teams/$id.json', body);
     }
+    await loadHome();
+  }
+
+  Future<void> markFlashSeen(String id) async {
+    try {
+      await _api.post('/flashes/$id/seen.json');
+    } catch (error) {
+      debugPrint('Flash olvasott: $error');
+    }
+    flashes = [
+      for (final item in flashes)
+        if (item.id == id)
+          FlashNote(
+            id: item.id,
+            subject: item.subject,
+            body: item.body,
+            target: item.target,
+            targetId: item.targetId,
+            seen: DateTime.now(),
+            created: item.created,
+          )
+        else
+          item,
+    ];
+    notifyListeners();
+  }
+
+  Future<void> deleteMember(String id) async {
+    await _api.delete('/users/$id.json');
     await loadHome();
   }
 

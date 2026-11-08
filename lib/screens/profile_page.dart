@@ -134,15 +134,16 @@ class _ProfileFormState extends State<ProfileForm> {
         if (needsPrivacy) 'accept_privacy': true,
         for (final entry in _mail.entries) entry.key: entry.value,
       };
+      final messenger = ScaffoldMessenger.of(context);
+      final navigator = Navigator.of(context, rootNavigator: true);
       await AppScope.of(context).saveProfile(body);
-      if (!mounted) {
+      final message = user.isNew && explains ? 'A jelentkezésed elment.' : 'A profil mentve.';
+      if (widget.closeOnSave) {
+        navigator.popUntil((route) => route.isFirst);
+        messenger.showSnackBar(SnackBar(content: Text(message)));
         return;
       }
-      final message = user.isNew && explains ? 'A jelentkezésed elment.' : 'A profil mentve.';
-      if (widget.closeOnSave && Navigator.of(context).canPop()) {
-        final messenger = ScaffoldMessenger.of(context);
-        Navigator.of(context).pop();
-        messenger.showSnackBar(SnackBar(content: Text(message)));
+      if (!mounted) {
         return;
       }
       showMessage(context, message);

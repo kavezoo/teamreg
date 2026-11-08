@@ -53,7 +53,35 @@ class ClubTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: dark ? const Color(0xFF26211C) : const Color(0xFFFFFDF9),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
+        floatingLabelBehavior: FloatingLabelBehavior.always,
+        contentPadding: const EdgeInsets.fromLTRB(14, 18, 14, 14),
+        labelStyle: TextStyle(
+          color: dark ? const Color(0xFFE0B56A) : const Color(0xFF6E3B24),
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+        ),
+        floatingLabelStyle: TextStyle(
+          color: dark ? const Color(0xFFE0B56A) : const Color(0xFF6E3B24),
+          fontWeight: FontWeight.w700,
+          fontSize: 13,
+        ),
+        hintStyle: TextStyle(
+          color: scheme.onSurface.withValues(alpha: 0.42),
+          fontStyle: FontStyle.italic,
+          fontWeight: FontWeight.w400,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: dark ? const Color(0xFF5C4A32) : const Color(0xFFD7C4A8)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: dark ? const Color(0xFF5C4A32) : const Color(0xFFD7C4A8)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide(color: dark ? const Color(0xFFE0B56A) : const Color(0xFF6E3B24), width: 1.6),
+        ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(

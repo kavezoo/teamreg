@@ -88,6 +88,7 @@ class Competition {
     required this.comment,
     required this.description,
     this.descriptionHtml = '',
+    this.infoUrl,
     required this.mapUrl,
     required this.dateCompetition,
     required this.dateFrom,
@@ -103,6 +104,7 @@ class Competition {
   final String comment;
   final String description;
   final String descriptionHtml;
+  final String? infoUrl;
   final String? mapUrl;
   final DateTime? dateCompetition;
   final DateTime? dateFrom;
@@ -126,6 +128,41 @@ class Competition {
 
   String title(String field) => (titles[field] ?? '').trim();
 
+  /// A pipaclub.hu-n lévő leírás címe. A régi, önmagában álló webcím is megfelel.
+  String? get infoLink {
+    final saved = (infoUrl ?? '').trim();
+    if (httpUrl(saved)) {
+      return saved;
+    }
+    final plain = description.trim();
+    if (httpUrl(plain) && !plain.contains(RegExp(r'\s')) && !plain.contains('<')) {
+      return plain;
+    }
+    return null;
+  }
+
+  bool hasEnded(DateTime now) {
+    final when = dateCompetition?.toLocal();
+    if (when == null) {
+      return false;
+    }
+    return when.isBefore(now);
+  }
+
+  /// A tag a megjelenés napjától látja, amíg a versenyidő el nem múlt.
+  bool listedFor(DateTime now) {
+    if (hasEnded(now)) {
+      return false;
+    }
+    final from = dateFrom?.toLocal();
+    if (from == null) {
+      return true;
+    }
+    final start = DateTime(from.year, from.month, from.day);
+    final today = DateTime(now.year, now.month, now.day);
+    return !start.isAfter(today);
+  }
+
   /// A webes leírásszűrő eredménye, ha az API küldi. Különben a tárolt HTML.
   String get renderedDescription {
     final safe = descriptionHtml.trim();
@@ -147,6 +184,7 @@ class Competition {
       comment: asText(json['comment']),
       description: asText(json['description']),
       descriptionHtml: asText(json['description_html']),
+      infoUrl: asText(json['info_url']).trim().isEmpty ? null : asText(json['info_url']).trim(),
       mapUrl: map.isEmpty ? null : map,
       dateCompetition: asDate(json['date_competition']),
       dateFrom: asDate(json['date_from']),
@@ -165,6 +203,7 @@ class Competition {
       comment: comment,
       description: description,
       descriptionHtml: descriptionHtml,
+      infoUrl: infoUrl,
       mapUrl: mapUrl,
       dateCompetition: dateCompetition,
       dateFrom: dateFrom,
@@ -445,6 +484,40 @@ String? _nullable(dynamic value) {
     return null;
   }
   return text;
+}
+
+class FlashNote {
+  const FlashNote({
+    required this.id,
+    required this.subject,
+    required this.body,
+    required this.target,
+    required this.targetId,
+    required this.seen,
+    required this.created,
+  });
+
+  final String id;
+  final String subject;
+  final String body;
+  final String target;
+  final String? targetId;
+  final DateTime? seen;
+  final DateTime? created;
+
+  bool get unread => seen == null;
+
+  factory FlashNote.fromJson(Map<String, dynamic> json) {
+    return FlashNote(
+      id: asText(json['id']),
+      subject: asText(json['subject']),
+      body: asText(json['body']),
+      target: asText(json['target']).isEmpty ? 'home' : asText(json['target']),
+      targetId: _nullable(json['target_id']),
+      seen: asDate(json['seen']),
+      created: asDate(json['created']),
+    );
+  }
 }
 
 Competition? currentRosterCompetition(List<Competition> competitions, [DateTime? now]) {

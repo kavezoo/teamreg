@@ -3,6 +3,7 @@ import 'package:flutter_widget_from_html_core/flutter_widget_from_html_core.dart
 import 'package:url_launcher/url_launcher.dart';
 
 import '../format.dart';
+import '../screens/flashes.dart';
 import '../state/app_model.dart';
 
 class AppScope extends InheritedNotifier<AppModel> {
@@ -114,12 +115,20 @@ class ThemeToggleButton extends StatelessWidget {
 }
 
 class ClubScaffold extends StatelessWidget {
-  const ClubScaffold({required this.title, required this.body, this.bottom, this.drawer, super.key});
+  const ClubScaffold({
+    required this.title,
+    required this.body,
+    this.bottom,
+    this.drawer,
+    this.showFlash = true,
+    super.key,
+  });
 
   final String title;
   final Widget body;
   final PreferredSizeWidget? bottom;
   final Widget? drawer;
+  final bool showFlash;
 
   @override
   Widget build(BuildContext context) {
@@ -138,6 +147,20 @@ class ClubScaffold extends StatelessWidget {
         ),
         bottom: bottom,
         actions: [
+          if (user != null)
+            IconButton(
+              tooltip: 'Üzenetek',
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (context) => const FlashesPage()),
+                );
+              },
+              icon: Badge(
+                isLabelVisible: model.unreadFlashes > 0,
+                label: Text('${model.unreadFlashes}'),
+                child: const Icon(Icons.notifications_outlined),
+              ),
+            ),
           if (user != null && !user.isNew)
             PopupMenuButton<String>(
               tooltip: 'Fiók',
@@ -170,23 +193,71 @@ class ClubScaffold extends StatelessWidget {
           const ThemeToggleButton(onDarkBar: true),
         ],
       ),
-      body: body,
+      body: Column(
+        children: [
+          if (showFlash && model.unreadFlashes > 0) const FlashBanner(),
+          Expanded(child: body),
+        ],
+      ),
     );
   }
 }
 
-class SectionCard extends StatelessWidget {
-  const SectionCard({required this.child, this.title, this.trailing, super.key});
+class Band extends StatelessWidget {
+  const Band({required this.index, required this.child, super.key});
 
-  final String? title;
-  final Widget? trailing;
+  final int index;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final line = dark ? const Color(0xFF5C4A32) : const Color(0xFFCDB89A);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: index.isOdd ? (dark ? const Color(0xFF322A22) : const Color(0xFFE8D7BE)) : null,
+        border: Border(bottom: BorderSide(color: line, width: 0.8)),
+      ),
+      child: child,
+    );
+  }
+}
+
+Future<void> openInBrowser(BuildContext context, String url) async {
+  final uri = Uri.tryParse(url.trim());
+  if (uri == null || !(uri.isScheme('http') || uri.isScheme('https'))) {
+    showMessage(context, 'A link nem nyitható meg.');
+    return;
+  }
+  try {
+    final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!opened && context.mounted) {
+      showMessage(context, 'A böngésző nem nyitható meg.');
+    }
+  } catch (error) {
+    if (context.mounted) {
+      showMessage(context, 'A böngésző nem nyitható meg.');
+    }
+  }
+}
+
+class SectionCard extends StatelessWidget {
+  const SectionCard({required this.child, this.title, this.trailing, this.bandIndex, super.key});
+
+  final String? title;
+  final Widget? trailing;
+  final Widget child;
+  final int? bandIndex;
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.only(bottom: 14),
+    final dark = theme.brightness == Brightness.dark;
+    final banded = bandIndex != null && bandIndex!.isOdd;
+    final line = dark ? const Color(0xFF5C4A32) : const Color(0xFFCDB89A);
+    final card = Card(
+      color: banded ? (dark ? const Color(0xFF322A22) : const Color(0xFFE8D7BE)) : null,
+      margin: EdgeInsets.only(bottom: bandIndex == null ? 14 : 0),
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
         child: Column(
@@ -206,6 +277,15 @@ class SectionCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+    if (bandIndex == null) {
+      return card;
+    }
+    return Column(
+      children: [
+        card,
+        Divider(height: 14, thickness: 0.8, color: line),
+      ],
     );
   }
 }

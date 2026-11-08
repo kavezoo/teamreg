@@ -4,6 +4,7 @@ import '../format.dart';
 import '../models.dart';
 import '../widgets/common.dart';
 import 'editors.dart';
+import 'past_competitions.dart';
 
 class MemberHome extends StatelessWidget {
   const MemberHome({super.key});
@@ -21,9 +22,10 @@ class MemberHome extends StatelessWidget {
         registrations: data?.registrations ?? const [],
         roster: data?.roster ?? const [],
         showRoster: true,
+        showPast: true,
       );
     }
-    return ClubScaffold(title: 'Ibafai Klubtag', body: body);
+    return ClubScaffold(title: 'Klubtag', body: body);
   }
 }
 
@@ -33,6 +35,7 @@ class CompetitionBoard extends StatelessWidget {
     required this.registrations,
     this.roster = const [],
     this.showRoster = false,
+    this.showPast = false,
     super.key,
   });
 
@@ -40,6 +43,7 @@ class CompetitionBoard extends StatelessWidget {
   final List<Registration> registrations;
   final List<RosterLine> roster;
   final bool showRoster;
+  final bool showPast;
 
   @override
   Widget build(BuildContext context) {
@@ -53,13 +57,27 @@ class CompetitionBoard extends StatelessWidget {
           if (competitions.isEmpty)
             const EmptyNote('Jelenleg nincs verseny, amire jelentkezni lehet.')
           else
-            for (final competition in competitions) ...[
+            for (var index = 0; index < competitions.length; index++) ...[
               _CompetitionCard(
-                competition: competition,
-                registration: _own(competition.id),
+                competition: competitions[index],
+                registration: _own(competitions[index].id),
+                bandIndex: index,
               ),
-              if (showRoster) _RosterBlock(competition: competition, roster: roster),
+              if (showRoster)
+                _RosterBlock(competition: competitions[index], roster: roster, bandIndex: index),
             ],
+          if (showPast)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (context) => const PastCompetitionsPage()),
+                  );
+                },
+                child: const Text('Korábbi versenyek'),
+              ),
+            ),
         ],
       ),
     );
@@ -76,15 +94,16 @@ class CompetitionBoard extends StatelessWidget {
 }
 
 class _CompetitionCard extends StatelessWidget {
-  const _CompetitionCard({required this.competition, required this.registration});
+  const _CompetitionCard({required this.competition, required this.registration, required this.bandIndex});
 
   final Competition competition;
   final Registration? registration;
+  final int bandIndex;
 
   @override
   Widget build(BuildContext context) {
-    final description = competition.renderedDescription;
     return SectionCard(
+      bandIndex: bandIndex,
       title: competition.name,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -105,10 +124,6 @@ class _CompetitionCard extends StatelessWidget {
               padding: EdgeInsets.only(top: 8),
               child: Text('A jelentkezés lezárult.'),
             ),
-          if (description.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            HtmlBlock(html: description),
-          ],
           const SizedBox(height: 12),
           if (registration != null)
             OutlinedButton(
@@ -135,10 +150,11 @@ class _CompetitionCard extends StatelessWidget {
 }
 
 class _RosterBlock extends StatelessWidget {
-  const _RosterBlock({required this.competition, required this.roster});
+  const _RosterBlock({required this.competition, required this.roster, required this.bandIndex});
 
   final Competition competition;
   final List<RosterLine> roster;
+  final int bandIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -154,6 +170,7 @@ class _RosterBlock extends StatelessWidget {
         ),
       );
     return SectionCard(
+      bandIndex: bandIndex,
       title: 'Jelentkezők',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -163,7 +180,8 @@ class _RosterBlock extends StatelessWidget {
           if (lines.isEmpty)
             const EmptyNote('Még nincs jelentkező.')
           else
-            for (final line in lines) _RosterTile(line: line),
+            for (var index = 0; index < lines.length; index++)
+              Band(index: index, child: _RosterTile(line: lines[index])),
         ],
       ),
     );

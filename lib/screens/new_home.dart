@@ -26,7 +26,7 @@ class _NewHomeState extends State<NewHome> {
       return;
     }
     final user = AppScope.of(context).user;
-    if (user == null || user.denied || user.membershipRequest == 'pending') {
+    if (user == null || user.denied || user.profileSaved || user.membershipRequest == 'pending') {
       return;
     }
     _openedForm = true;
@@ -112,7 +112,7 @@ class _NewHomeState extends State<NewHome> {
     }
     final pending = user.membershipRequest == 'pending';
     return ClubScaffold(
-      title: 'Új tag',
+      title: 'Új tag, elfogadásra vár',
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [

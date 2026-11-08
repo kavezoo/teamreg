@@ -91,7 +91,6 @@ class _RegistrationEditorState extends State<RegistrationEditor> {
   @override
   Widget build(BuildContext context) {
     final competition = widget.competition;
-    final description = competition.renderedDescription;
     return Scaffold(
       appBar: AppBar(title: Text(competition.name)),
       body: ListView(
@@ -112,14 +111,11 @@ class _RegistrationEditorState extends State<RegistrationEditor> {
             maxLength: 1000,
             minLines: 3,
             maxLines: 6,
-            decoration: const InputDecoration(labelText: 'Megjegyzés, pl. speciális ebédigény'),
+            decoration: const InputDecoration(
+              labelText: 'Megjegyzés',
+              hintText: 'Például speciális ebédigény',
+            ),
           ),
-          if (description.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            Text('Leírás', style: Theme.of(context).textTheme.titleSmall),
-            const SizedBox(height: 6),
-            HtmlBlock(html: description),
-          ],
           const SizedBox(height: 16),
           FilledButton(onPressed: _busy ? null : _save, child: const Text('Mentés')),
           if (widget.registration != null && !competition.closed) ...[
@@ -178,8 +174,13 @@ class ScheduleBlock extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Verseny ideje: ${formatDateTime(competition.dateCompetition)}'),
-        Text('Jelentkezés kezdete: ${formatDate(competition.dateFrom)}'),
         Text('Jelentkezési határidő: ${formatDate(competition.dateDeadline)}'),
+        if (competition.infoLink != null)
+          TextButton.icon(
+            onPressed: () => openInBrowser(context, competition.infoLink!),
+            icon: const Icon(Icons.open_in_browser),
+            label: const Text('A verseny leírása'),
+          ),
         if (map != null)
           TextButton.icon(
             onPressed: () async {
@@ -209,7 +210,7 @@ class _CompetitionEditorState extends State<CompetitionEditor> {
   late final TextEditingController _name;
   late final TextEditingController _comment;
   late final TextEditingController _map;
-  late final TextEditingController _description;
+  late final TextEditingController _link;
   late final TextEditingController _pos;
   late final Map<String, TextEditingController> _titles;
   DateTime? _from;
@@ -225,7 +226,7 @@ class _CompetitionEditorState extends State<CompetitionEditor> {
     _name = TextEditingController(text: competition?.name ?? '');
     _comment = TextEditingController(text: competition?.comment ?? '');
     _map = TextEditingController(text: competition?.mapUrl ?? '');
-    _description = TextEditingController(text: competition?.description ?? '');
+    _link = TextEditingController(text: competition?.infoLink ?? '');
     _pos = TextEditingController(text: '${competition?.pos ?? 0}');
     _from = competition?.dateFrom;
     _deadline = competition?.dateDeadline;
@@ -244,7 +245,7 @@ class _CompetitionEditorState extends State<CompetitionEditor> {
     _name.dispose();
     _comment.dispose();
     _map.dispose();
-    _description.dispose();
+    _link.dispose();
     _pos.dispose();
     for (final controller in _titles.values) {
       controller.dispose();
@@ -309,12 +310,17 @@ class _CompetitionEditorState extends State<CompetitionEditor> {
       showMessage(context, 'A megjegyzés kötelező.');
       return;
     }
+    final link = _link.text.trim();
     if (_from == null || _deadline == null) {
-      showMessage(context, 'A jelentkezés kezdete és a határidő is kell.');
+      showMessage(context, 'A megjelenés napja és a határidő is kell.');
       return;
     }
     if (map.isNotEmpty && !httpUrl(map)) {
       showMessage(context, 'A térkép címe http vagy https legyen.');
+      return;
+    }
+    if (link.isNotEmpty && !httpUrl(link)) {
+      showMessage(context, 'A leírás linkje http vagy https legyen.');
       return;
     }
     setState(() => _busy = true);
@@ -326,7 +332,7 @@ class _CompetitionEditorState extends State<CompetitionEditor> {
         'date_deadline': apiDate(_deadline),
         'date_competition': apiDateTime(_when),
         'map_url': map,
-        'description': _description.text,
+        'info_url': link,
         'visible': _visible,
         'pos': int.tryParse(_pos.text.trim()) ?? 0,
         for (final entry in _titles.entries) entry.key: entry.value.text.trim(),
@@ -362,8 +368,12 @@ class _CompetitionEditorState extends State<CompetitionEditor> {
           const SizedBox(height: 12),
           ListTile(
             contentPadding: EdgeInsets.zero,
-            title: const Text('Jelentkezés kezdete'),
-            subtitle: Text(formatDate(_from)),
+            title: const Text('Megjelenés a listában'),
+            subtitle: Text(
+              _from == null
+                  ? 'nincs megadva\nEttől a naptól látják a tagok.'
+                  : '${formatDate(_from)}\nEttől a naptól látják a tagok.',
+            ),
             trailing: const Icon(Icons.event),
             onTap: () => _pickDate(deadline: false),
           ),
@@ -414,10 +424,12 @@ class _CompetitionEditorState extends State<CompetitionEditor> {
           ),
           const SizedBox(height: 12),
           TextField(
-            controller: _description,
-            minLines: 4,
-            maxLines: 10,
-            decoration: const InputDecoration(labelText: 'Leírás'),
+            controller: _link,
+            keyboardType: TextInputType.url,
+            decoration: const InputDecoration(
+              labelText: 'Leírás linkje',
+              hintText: 'https://pipaclub.hu/...',
+            ),
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,

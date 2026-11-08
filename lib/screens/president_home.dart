@@ -3,8 +3,10 @@ import 'package:flutter/material.dart';
 import '../format.dart';
 import '../models.dart';
 import '../widgets/common.dart';
+import 'delete_members.dart';
 import 'editors.dart';
 import 'member_home.dart';
+import 'past_competitions.dart';
 
 class PresidentHome extends StatefulWidget {
   const PresidentHome({super.key});
@@ -16,13 +18,32 @@ class PresidentHome extends StatefulWidget {
 class _PresidentHomeState extends State<PresidentHome> {
   static const _sections = ['Jelentkezők', 'Versenyek', 'Nevezésem', 'Nevezők', 'Tagok', 'Alcsapatok'];
 
-  int _section = 0;
+  int _section = 3;
+  bool _pickedStart = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final section = AppScope.of(context).requestedSection;
+    if (section == null || section == _section) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final next = AppScope.of(context).takeSection();
+      if (next != null) {
+        setState(() => _section = next);
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
     final data = model.data;
-    final title = model.user?.role == 'admin' ? 'Admin' : 'Ibafai Klubelnök';
+    final title = model.user?.role == 'admin' ? 'Admin' : 'Klubelnök';
     if (model.error != null && data == null) {
       return ClubScaffold(
         title: title,
@@ -30,6 +51,12 @@ class _PresidentHomeState extends State<PresidentHome> {
       );
     }
     final home = data ?? HomeData.empty;
+    if (!_pickedStart && data != null && model.requestedSection == null) {
+      _pickedStart = true;
+      if (data.applicants.isNotEmpty) {
+        _section = 0;
+      }
+    }
     final pending = home.applicants.length;
     return ClubScaffold(
       title: title,
@@ -48,6 +75,25 @@ class _PresidentHomeState extends State<PresidentHome> {
                     Navigator.of(context).pop();
                   },
                 ),
+              if (model.user?.role == 'admin')
+                ListTile(
+                  title: const Text('Tagok törlése'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    Navigator.of(context).push(
+                      MaterialPageRoute<void>(builder: (context) => const DeleteMembersPage()),
+                    );
+                  },
+                ),
+              ListTile(
+                title: const Text('Korábbi versenyek'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(builder: (context) => const PastCompetitionsPage(canEdit: true)),
+                  );
+                },
+              ),
               const Divider(),
               ListTile(
                 title: const Text('Saját adatok'),
@@ -112,16 +158,18 @@ class _Applicants extends StatelessWidget {
     }
     return _Refresh(
       children: [
-        for (final applicant in data.applicants) _ApplicantCard(applicant: applicant),
+        for (var index = 0; index < data.applicants.length; index++)
+          _ApplicantCard(applicant: data.applicants[index], bandIndex: index),
       ],
     );
   }
 }
 
 class _ApplicantCard extends StatefulWidget {
-  const _ApplicantCard({required this.applicant});
+  const _ApplicantCard({required this.applicant, required this.bandIndex});
 
   final Applicant applicant;
+  final int bandIndex;
 
   @override
   State<_ApplicantCard> createState() => _ApplicantCardState();
@@ -150,6 +198,7 @@ class _ApplicantCardState extends State<_ApplicantCard> {
     final applicant = widget.applicant;
     final model = AppScope.of(context);
     return SectionCard(
+      bandIndex: widget.bandIndex,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -215,18 +264,19 @@ class _Competitions extends StatelessWidget {
         if (data.competitions.isEmpty)
           const EmptyNote('Még nincs kiírt verseny.')
         else
-          for (final competition in data.competitions)
-            _CompetitionRow(competition: competition, data: data),
+          for (var index = 0; index < data.competitions.length; index++)
+            _CompetitionRow(competition: data.competitions[index], data: data, bandIndex: index),
       ],
     );
   }
 }
 
 class _CompetitionRow extends StatelessWidget {
-  const _CompetitionRow({required this.competition, required this.data});
+  const _CompetitionRow({required this.competition, required this.data, required this.bandIndex});
 
   final Competition competition;
   final HomeData data;
+  final int bandIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -243,6 +293,7 @@ class _CompetitionRow extends StatelessWidget {
       );
     final names = people.map((row) => row.userName).where((name) => name.isNotEmpty).toList();
     return SectionCard(
+      bandIndex: bandIndex,
       title: competition.name,
       trailing: IconButton(
         tooltip: 'Szerkesztés',
@@ -275,8 +326,12 @@ class _Groups extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final currentIds = data.competitions.map((item) => item.id).toSet();
     final grouped = <int, List<Registration>>{};
     for (final row in data.registrations) {
+      if (!currentIds.contains(row.competitionId)) {
+        continue;
+      }
       grouped.putIfAbsent(row.competitionId, () => []).add(row);
     }
     final keys = grouped.keys.toList()
@@ -341,7 +396,8 @@ class _Group extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (competition != null) ScheduleBlock(competition: competition),
-          for (final row in sorted) _AssignRow(row: row, teams: data.teams),
+          for (var index = 0; index < sorted.length; index++)
+            Band(index: index, child: _AssignRow(row: sorted[index], teams: data.teams)),
         ],
       ),
     );
@@ -451,8 +507,11 @@ class _Members extends StatelessWidget {
         if (members == null || members.members.isEmpty)
           const EmptyNote('Nincs aktív tag.')
         else
-          for (final member in members.members)
-            _MemberRow(member: member, competitionId: members.competitionId),
+          for (var index = 0; index < members.members.length; index++)
+            Band(
+              index: index,
+              child: _MemberRow(member: members.members[index], competitionId: members.competitionId),
+            ),
       ],
     );
   }
@@ -585,15 +644,20 @@ class _Teams extends StatelessWidget {
         if (data.teams.isEmpty)
           const EmptyNote('Még nincs alcsapat.')
         else
-          for (final team in data.teams)
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(team.name),
-              subtitle: Text('Sorrend: ${team.pos} · ${team.visible ? 'Látható' : 'Rejtett'}'),
-              trailing: IconButton(
-                tooltip: 'Szerkesztés',
-                onPressed: () => editTeam(context, team: team),
-                icon: const Icon(Icons.edit_outlined),
+          for (var index = 0; index < data.teams.length; index++)
+            Band(
+              index: index,
+              child: ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(data.teams[index].name),
+                subtitle: Text(
+                  'Sorrend: ${data.teams[index].pos} · ${data.teams[index].visible ? 'Látható' : 'Rejtett'}',
+                ),
+                trailing: IconButton(
+                  tooltip: 'Szerkesztés',
+                  onPressed: () => editTeam(context, team: data.teams[index]),
+                  icon: const Icon(Icons.edit_outlined),
+                ),
               ),
             ),
       ],
