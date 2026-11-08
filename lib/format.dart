@@ -48,6 +48,11 @@ int asInt(dynamic value, {int fallback = 0}) {
 }
 
 /// API-logikai: true/false, 1/0, illetve a „true” és „false” szöveg.
+String absenceLabel(String prefix, String? reason) {
+  final text = (reason ?? '').trim();
+  return text.isEmpty ? prefix : '$prefix: $text';
+}
+
 bool asBool(dynamic value, {bool fallback = false}) {
   if (value is bool) {
     return value;
@@ -126,6 +131,24 @@ String formatDateTime(DateTime? value) {
   final hour = local.hour.toString().padLeft(2, '0');
   final minute = local.minute.toString().padLeft(2, '0');
   return '${formatDate(local)} $hour:$minute';
+}
+
+/// Csevegő napelválasztó: ma csak idő, másnap dátummal.
+String formatChatDay(DateTime value, [DateTime? now]) {
+  final local = value.toLocal();
+  final clock = (now ?? DateTime.now()).toLocal();
+  final today = DateTime(clock.year, clock.month, clock.day);
+  final day = DateTime(local.year, local.month, local.day);
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  final time = '$hour:$minute';
+  if (day == today) {
+    return time;
+  }
+  if (day == today.subtract(const Duration(days: 1))) {
+    return 'Tegnap $time';
+  }
+  return '${formatDate(local)} $time';
 }
 
 /// API-nak küldött nap: 2026-11-08

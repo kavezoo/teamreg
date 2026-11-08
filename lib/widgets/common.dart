@@ -1,7 +1,7 @@
 /*
  * Közös felület: állapothozzáférés, címsor, kártya, csíkozott sor, splash.
  *
- * A ClubScaffold a címsor, a csengő és a téma gomb. A Band minden második
+ * A ClubScaffold a címsor és a csengő. A fiók és a téma az oldalmenüben van. A Band minden második
  * sort eltérő háttérrel és vékony választóvonallal rajzolja.
  */
 import 'package:flutter/material.dart';
@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../format.dart';
 import '../screens/flashes.dart';
+import '../screens/settings_page.dart';
 import '../state/app_model.dart';
 
 /// Az AppModel elérése a fából: AppScope.of(context).
@@ -126,7 +127,140 @@ class ThemeToggleButton extends StatelessWidget {
   }
 }
 
-/// Közös váz: címsor logóval, üzenetcsengő, téma, és a legújabb olvasatlan sáv.
+/// Oldalról becsúszó menü. A címsorral egy sávban a logó van, a sötét sávra a világos változat kerül.
+class ClubDrawer extends StatelessWidget {
+  const ClubDrawer({required this.children, this.showAccount = false, super.key});
+
+  final List<Widget> children;
+  final bool showAccount;
+
+  @override
+  Widget build(BuildContext context) {
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final bar = dark ? const Color(0xFF1A1613) : const Color(0xFF3E2618);
+    final onBar = dark ? const Color(0xFFF6E7C8) : const Color(0xFFFFF8EF);
+    return Drawer(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      elevation: 0,
+      surfaceTintColor: Colors.transparent,
+      shape: const RoundedRectangleBorder(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Material(
+            color: bar,
+            child: SizedBox(
+              height: kToolbarHeight,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    const ClubMark(size: 34, onDarkBackground: true),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Ibafai Pipaklub',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: onBar, fontWeight: FontWeight.w700, fontSize: 16),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          if (showAccount) const _DrawerAccount(),
+          Expanded(
+            child: ListTileTheme(
+              data: ListTileThemeData(
+                selectedColor: dark ? const Color(0xFFE0B56A) : const Color(0xFF6E3B24),
+                selectedTileColor: dark ? const Color(0xFF2A241C) : const Color(0xFFF3E6D4),
+              ),
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: children,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A kezdőlap menüje nélkül: profilkép, Profil és Beállítások.
+class AccountDrawer extends StatelessWidget {
+  const AccountDrawer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return ClubDrawer(
+      showAccount: true,
+      children: accountDrawerTiles(context),
+    );
+  }
+}
+
+/// Profil, beállítások és kijelentkezés. Az elnöki menü aljára is ez kerül.
+List<Widget> accountDrawerTiles(BuildContext context) {
+  final model = AppScope.of(context);
+  return [
+    ListTile(
+      title: const Text('Profil'),
+      onTap: () {
+        Navigator.of(context).pop();
+        Navigator.of(context).pushNamed('/profile');
+      },
+    ),
+    ListTile(
+      title: const Text('Beállítások'),
+      onTap: () {
+        Navigator.of(context).pop();
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(builder: (context) => const SettingsPage()),
+        );
+      },
+    ),
+    ListTile(
+      title: const Text('Kijelentkezés'),
+      onTap: () {
+        Navigator.of(context).pop();
+        model.logout();
+      },
+    ),
+  ];
+}
+
+class _DrawerAccount extends StatelessWidget {
+  const _DrawerAccount();
+
+  @override
+  Widget build(BuildContext context) {
+    final model = AppScope.of(context);
+    final user = model.user;
+    final name = user == null || user.name.trim().isEmpty ? (user?.email ?? '') : user.name;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      child: Row(
+        children: [
+          UserAvatar(name: name, url: model.ownPhoto, radius: 28),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              name.isEmpty ? 'Fiók' : name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Közös váz. A címsorban a cím van, logó nélkül. A fiók az oldalmenüben van.
 class ClubScaffold extends StatelessWidget {
   const ClubScaffold({
     required this.title,
@@ -134,6 +268,7 @@ class ClubScaffold extends StatelessWidget {
     this.bottom,
     this.drawer,
     this.showFlash = true,
+    this.isHome = false,
     super.key,
   });
 
@@ -143,20 +278,29 @@ class ClubScaffold extends StatelessWidget {
   final Widget? drawer;
   final bool showFlash;
 
+  /// Főképernyő: hamburger menü, visszanyíl nélkül.
+  final bool isHome;
+
   @override
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
     final user = model.user;
-    return Scaffold(
-      drawer: drawer,
+    final navigatorCanPop = Navigator.of(context).canPop();
+    final canPop = !isHome && navigatorCanPop;
+    final menu = drawer ?? (user == null ? null : const AccountDrawer());
+    return PopScope(
+      canPop: !isHome || !navigatorCanPop,
+      child: Scaffold(
+      drawer: menu,
       appBar: AppBar(
-        titleSpacing: 12,
-        title: Row(
-          children: [
-            const ClubMark(size: 34, onDarkBackground: true),
-            const SizedBox(width: 10),
-            Expanded(child: Text(title, overflow: TextOverflow.ellipsis)),
-          ],
+        automaticallyImplyLeading: menu != null && !canPop,
+        leading: canPop ? const BackButton() : null,
+        titleSpacing: canPop ? 0 : 12,
+        title: Text(
+          title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
         ),
         bottom: bottom,
         actions: [
@@ -174,36 +318,6 @@ class ClubScaffold extends StatelessWidget {
                 child: const Icon(Icons.notifications_outlined),
               ),
             ),
-          if (user != null && !user.isNew)
-            PopupMenuButton<String>(
-              tooltip: 'Fiók',
-              onSelected: (value) async {
-                if (value == 'profile') {
-                  await Navigator.of(context).pushNamed('/profile');
-                } else if (value == 'logout') {
-                  await model.logout();
-                }
-              },
-              itemBuilder: (context) => [
-                PopupMenuItem(
-                  enabled: false,
-                  child: Text(user.name.isEmpty ? user.email : user.name),
-                ),
-                const PopupMenuItem(value: 'profile', child: Text('Saját adatok')),
-                const PopupMenuItem(value: 'logout', child: Text('Kijelentkezés')),
-              ],
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
-                child: UserAvatar(name: user.name, url: model.ownPhoto, radius: 16),
-              ),
-            ),
-          if (user != null && user.isNew)
-            IconButton(
-              tooltip: 'Kijelentkezés',
-              onPressed: model.logout,
-              icon: const Icon(Icons.logout),
-            ),
-          const ThemeToggleButton(onDarkBar: true),
         ],
       ),
       body: Column(
@@ -212,6 +326,7 @@ class ClubScaffold extends StatelessWidget {
           Expanded(child: body),
         ],
       ),
+    ),
     );
   }
 }
@@ -377,6 +492,42 @@ Future<bool> confirmAction(
     },
   );
   return result == true;
+}
+
+/// Határidő utáni indok. Üresen nem lehet menteni.
+Future<String?> askAbsenceReason(BuildContext context, {String initial = ''}) async {
+  final controller = TextEditingController(text: initial);
+  final result = await showDialog<String>(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text('Nem tudok jönni'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 1000,
+          minLines: 2,
+          maxLines: 5,
+          decoration: const InputDecoration(labelText: 'Miért nem tudsz jönni?'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Mégse')),
+          FilledButton(
+            onPressed: () {
+              final text = controller.text.trim();
+              if (text.isEmpty) {
+                return;
+              }
+              Navigator.pop(context, text);
+            },
+            child: const Text('Mentés'),
+          ),
+        ],
+      );
+    },
+  );
+  controller.dispose();
+  return result;
 }
 
 /// Rövid üzenet a képernyő alján.

@@ -39,7 +39,7 @@ class ProfilePage extends StatelessWidget {
       return const SizedBox.shrink();
     }
     return ClubScaffold(
-      title: 'Saját adatok',
+      title: 'Profil',
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
@@ -85,7 +85,7 @@ class _DeleteAccountButton extends StatelessWidget {
   }
 }
 
-/// Név, levél- és telefonos kapcsolók, mentés. A [closeOnSave] a megnyitó lapra visz vissza.
+/// Név mentése. A kapcsolók a Beállításokban vannak. A [closeOnSave] a megnyitó lapra visz vissza.
 class ProfileForm extends StatefulWidget {
   const ProfileForm({required this.user, this.closeOnSave = false, super.key});
 
@@ -99,8 +99,6 @@ class ProfileForm extends StatefulWidget {
 class _ProfileFormState extends State<ProfileForm> {
   late final TextEditingController _family;
   late final TextEditingController _given;
-  late Map<String, bool> _mail;
-  late Map<String, bool> _flash;
   bool _busy = false;
 
   @override
@@ -108,8 +106,6 @@ class _ProfileFormState extends State<ProfileForm> {
     super.initState();
     _family = TextEditingController(text: widget.user.firstName);
     _given = TextEditingController(text: widget.user.lastName);
-    _mail = Map<String, bool>.from(widget.user.mail);
-    _flash = Map<String, bool>.from(widget.user.flash);
   }
 
   @override
@@ -118,8 +114,6 @@ class _ProfileFormState extends State<ProfileForm> {
     if (oldWidget.user.id != widget.user.id || oldWidget.user.role != widget.user.role) {
       _family.text = widget.user.firstName;
       _given.text = widget.user.lastName;
-      _mail = Map<String, bool>.from(widget.user.mail);
-      _flash = Map<String, bool>.from(widget.user.flash);
     }
   }
 
@@ -147,8 +141,9 @@ class _ProfileFormState extends State<ProfileForm> {
         'first_name': family,
         'last_name': given,
         if (needsPrivacy) 'accept_privacy': true,
-        for (final entry in _mail.entries) entry.key: entry.value,
-        for (final entry in _flash.entries) entry.key: entry.value,
+        // A kapcsolók a Beállításokban változnak. A név mentése a mostani állást küldi tovább.
+        for (final entry in user.mailChoices.entries) entry.key: user.mail[entry.key] ?? true,
+        for (final entry in user.flashChoices.entries) entry.key: user.flash[entry.key] ?? true,
       };
       // A mentés szerepet válthat, és a kezdőlap újraépül. A navigátort előtte kell elkapni.
       final messenger = ScaffoldMessenger.of(context);
@@ -221,32 +216,6 @@ class _ProfileFormState extends State<ProfileForm> {
             child: const Text('Nevek cseréje'),
           ),
         ),
-        if (user.mailChoices.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text('E-mailek', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 4),
-          const Text('Beállíthatod, milyen levelet kérsz. A jelölés alapból be van kapcsolva.'),
-          for (final entry in user.mailChoices.entries)
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(entry.value),
-              value: _mail[entry.key] ?? true,
-              onChanged: (value) => setState(() => _mail[entry.key] = value),
-            ),
-        ],
-        if (user.flashChoices.isNotEmpty) ...[
-          const SizedBox(height: 8),
-          Text('Telefonos üzenetek', style: Theme.of(context).textTheme.titleSmall),
-          const SizedBox(height: 4),
-          const Text('Beállíthatod, milyen üzenetet kérsz a telefonra. A jelölés alapból be van kapcsolva.'),
-          for (final entry in user.flashChoices.entries)
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(entry.value),
-              value: _flash[entry.key] ?? true,
-              onChanged: (value) => setState(() => _flash[entry.key] = value),
-            ),
-        ],
         if (needsPrivacy) ...[
           Align(
             alignment: Alignment.centerLeft,

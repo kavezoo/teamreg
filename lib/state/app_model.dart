@@ -25,6 +25,47 @@ const _themeChannel = MethodChannel('hu.vzsfoto.teamreg/theme');
 /// Háttérfigyelés: ugyanaz az alkalmazás nézi az új flash üzeneteket.
 const _watchChannel = MethodChannel('hu.vzsfoto.teamreg/messages');
 
+/// Értesítés koppintása, a címzett fiókkal együtt.
+class NotificationTap {
+  const NotificationTap({
+    required this.flash,
+    required this.ownerId,
+    required this.ownerName,
+    required this.ownerEmail,
+  });
+
+  final FlashNote flash;
+  final String ownerId;
+  final String ownerName;
+  final String ownerEmail;
+
+  /// Név és e-mail, ahogy a belépő képernyőn meg kell nevezni a fiókot.
+  String get accountLabel {
+    final name = ownerName.trim();
+    final email = ownerEmail.trim();
+    if (name.isNotEmpty && email.isNotEmpty) {
+      return '$name ($email)';
+    }
+    if (email.isNotEmpty) {
+      return email;
+    }
+    if (name.isNotEmpty) {
+      return name;
+    }
+    return '';
+  }
+
+  bool belongsTo(UserProfile? user) {
+    if (user == null) {
+      return false;
+    }
+    if (ownerId.isEmpty) {
+      return true;
+    }
+    return ownerId == user.id;
+  }
+}
+
 /// Közös állapot. A notifyListeners rajzolja újra a feliratkozott képernyőket.
 class AppModel extends ChangeNotifier {
   AppModel({ApiClient? api, FlutterSecureStorage? storage})
@@ -55,6 +96,9 @@ class AppModel extends ChangeNotifier {
   /// Egyszeri üzenet, például az elutasított jelentkezés szövege.
   String? notice;
 
+  /// A koppintott üzenet, amíg a megfelelő fiók be nem lép.
+  NotificationTap? _waitingOpen;
+
   /// A telefonra küldött üzenetek, a legújabb elöl.
   List<FlashNote> flashes = const [];
 
@@ -72,6 +116,44 @@ class AppModel extends ChangeNotifier {
   }
 
   String? get ownPhoto => sizedPhoto(photoUrl ?? user?.avatar, 256);
+
+  /// Ismert profilkép egy taghoz. A beszélgetés a saját képet és a már betöltött listákat használja.
+  String? avatarFor(String userId) {
+    if (userId.isEmpty) {
+      return null;
+    }
+    if (userId == user?.id) {
+      final own = photoUrl ?? user?.avatar;
+      if (own != null && own.isNotEmpty) {
+        return own;
+      }
+    }
+    final home = data;
+    if (home == null) {
+      return null;
+    }
+    for (final member in home.members?.members ?? const <ClubMember>[]) {
+      if (member.id == userId && member.avatar != null && member.avatar!.isNotEmpty) {
+        return member.avatar;
+      }
+    }
+    for (final row in home.registrations) {
+      if (row.userId == userId && row.avatar != null && row.avatar!.isNotEmpty) {
+        return row.avatar;
+      }
+    }
+    for (final line in home.roster) {
+      if (line.userId == userId && line.avatar != null && line.avatar!.isNotEmpty) {
+        return line.avatar;
+      }
+    }
+    for (final applicant in home.applicants) {
+      if (applicant.id == userId && applicant.avatar != null && applicant.avatar!.isNotEmpty) {
+        return applicant.avatar;
+      }
+    }
+    return null;
+  }
 
   /// Indulás: téma, Google, mentett belépés, majd a kezdőlap.
   Future<void> bootstrap() async {
@@ -112,6 +194,18 @@ class AppModel extends ChangeNotifier {
         return 'A belépés nem sikerült.';
       }
       await _storeSession(payload, photo: account.photoUrl);
+      final waiting = _waitingOpen;
+      if (waiting != null && !waiting.belongsTo(user)) {
+        final text = _foreignAccountNotice(waiting);
+        await logout();
+        _waitingOpen = waiting;
+        notice = text;
+        notifyListeners();
+        return null;
+      }
+      if (waiting != null) {
+        notice = null;
+      }
       ready = false;
       notifyListeners();
       await loadHome(initial: true);
@@ -248,6 +342,12 @@ class AppModel extends ChangeNotifier {
     }
   }
 
+  /// A nyitott csevegő frissíti az olvasatlan flash listát is.
+  Future<void> refreshFlashes() async {
+    await _fetchFlashes();
+    notifyListeners();
+  }
+
   /// Elnöki menüpont kérése üzenetből. 0 jelentkezők, 1 versenyek, 3 nevezők.
   void requestSection(int section) {
     requestedSection = section;
@@ -373,6 +473,8 @@ class AppModel extends ChangeNotifier {
         competitionName: row.competitionName,
         comment: row.comment ?? existing?.comment,
         counts: row.counts,
+        absent: row.absent || (existing?.absent ?? false),
+        absentReason: row.absentReason ?? existing?.absentReason,
       );
     }
     final teams = teamRows.map(Team.fromJson).toList()
@@ -404,6 +506,8 @@ class AppModel extends ChangeNotifier {
         competitionName: row.competitionName,
         comment: row.comment,
         counts: row.counts,
+        absent: row.absent,
+        absentReason: row.absentReason,
       );
     }).toList();
     return HomeData(
@@ -597,14 +701,31 @@ class AppModel extends ChangeNotifier {
         'accessToken': access,
         'refreshToken': refresh,
         'baseUrl': ApiConfig.baseUrl,
+        'userId': user!.id,
+        'userName': user!.name,
+        'userEmail': user!.email,
       });
     } catch (error) {
       debugPrint('Üzenetfigyelés: $error');
     }
   }
 
-  /// Az értesítésből nyitandó flash. Egyszer olvasható.
-  Future<FlashNote?> takeNotification() async {
+  /// A natív értesítés koppintása szól, amikor az alkalmazás már fut.
+  void listenForOpens(Future<void> Function() onOpen) {
+    _watchChannel.setMethodCallHandler((call) async {
+      if (call.method == 'opened') {
+        await onOpen();
+      }
+    });
+  }
+
+  /// Az értesítésből nyitandó flash. Egyszer olvasható. A lista célja üres azonosítójú.
+  Future<NotificationTap?> takeNotification() async {
+    final waiting = _waitingOpen;
+    if (waiting != null && waiting.belongsTo(user)) {
+      _waitingOpen = null;
+      return waiting;
+    }
     try {
       final raw = await _watchChannel.invokeMethod<dynamic>('takeOpen');
       if (raw is! Map) {
@@ -612,23 +733,50 @@ class AppModel extends ChangeNotifier {
       }
       final map = Map<String, dynamic>.from(raw);
       final id = asText(map['id']);
-      if (id.isEmpty) {
+      final target = asText(map['target']);
+      if (id.isEmpty && target != 'list') {
         return null;
       }
       final targetId = asText(map['targetId']);
-      return FlashNote(
-        id: id,
-        subject: asText(map['subject']),
-        body: asText(map['body']),
-        target: asText(map['target']).isEmpty ? 'message' : asText(map['target']),
-        targetId: targetId.isEmpty ? null : targetId,
-        seen: null,
-        created: null,
+      return NotificationTap(
+        flash: FlashNote(
+          id: id,
+          subject: asText(map['subject']),
+          body: asText(map['body']),
+          target: target.isEmpty ? 'message' : target,
+          targetId: targetId.isEmpty ? null : targetId,
+          seen: null,
+          created: null,
+        ),
+        ownerId: asText(map['ownerId']),
+        ownerName: asText(map['ownerName']),
+        ownerEmail: asText(map['ownerEmail']),
       );
     } catch (error) {
       debugPrint('Üzenetnyitás: $error');
       return null;
     }
+  }
+
+  /// Másik Google-fiók nyitotta az üzenetet: kijelentkeztet, és megmondja, melyikkel lépjen be.
+  Future<void> holdForeignFlash(NotificationTap tap) async {
+    final text = _foreignAccountNotice(tap);
+    if (user != null && tap.ownerId.isNotEmpty && tap.ownerId != user!.id) {
+      await logout();
+    }
+    _waitingOpen = tap;
+    notice = text;
+    notifyListeners();
+  }
+
+  String _foreignAccountNotice(NotificationTap tap) {
+    final label = tap.accountLabel;
+    if (label.isEmpty) {
+      return 'Ez az üzenet egy másik Google-fiókhoz tartozik. '
+          'Jelentkezz be azzal a fiókkal, amelyikhez érkezett, hogy elolvashasd.';
+    }
+    return 'Ez az üzenet ehhez a fiókhoz tartozik: $label. '
+        'Jelentkezz be azzal a Google-fiókkal, hogy elolvashasd.';
   }
 
   /// Új vagy meglévő nevezés. A csapatot csak az elnök küldi, [includeTeam] mellett.
@@ -659,6 +807,12 @@ class AppModel extends ChangeNotifier {
   /// Nevezés visszavonása a határidő előtt.
   Future<void> withdrawRegistration(int id) async {
     await _api.delete('/registrations/$id.json');
+    await loadHome();
+  }
+
+  /// Határidő után a nevezés megmarad, az indokkal jelöljük, hogy nem tud jönni.
+  Future<void> markAbsent(int id, String reason) async {
+    await _api.post('/registrations/$id/absent.json', {'reason': reason.trim()});
     await loadHome();
   }
 
@@ -741,6 +895,11 @@ class AppModel extends ChangeNotifier {
     } catch (error) {
       debugPrint('Flash olvasott: $error');
     }
+    try {
+      await _watchChannel.invokeMethod<void>('dismissFlash', {'id': id});
+    } catch (error) {
+      debugPrint('Flash értesítés eltüntetése: $error');
+    }
     flashes = [
       for (final item in flashes)
         if (item.id == id)
@@ -771,14 +930,17 @@ class AppModel extends ChangeNotifier {
     return MessageThread.fromJson(asMap(json['thread']));
   }
 
-  /// Új üzenet egy tagnak vagy elnöknek. A címzett telefonján flashként jelenik meg.
+  /// Új üzenet mindenkinek, vagy a kijelölt tagoknak. A címzettek telefonján flashként jelenik meg.
   Future<void> sendClubMessage({
-    required String recipientId,
     required String subject,
     required String body,
+    required bool everyone,
+    List<String> recipientIds = const [],
   }) async {
     await _api.post('/messages.json', {
-      'recipient_id': recipientId,
+      if (everyone) 'audience': 'all',
+      if (!everyone) 'recipient_ids': recipientIds,
+      if (!everyone && recipientIds.length == 1) 'recipient_id': recipientIds.first,
       'subject': subject,
       'body': body,
     });

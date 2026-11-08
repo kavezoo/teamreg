@@ -30,6 +30,11 @@ class MessageWatchService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onCreate() {
+        super.onCreate()
+        live = this
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
             clearCreds()
@@ -41,6 +46,14 @@ class MessageWatchService : Service() {
         val base = intent?.getStringExtra(EXTRA_BASE)
         if (!access.isNullOrBlank() && !refresh.isNullOrBlank() && !base.isNullOrBlank()) {
             saveCreds(access, refresh, base.trimEnd('/'))
+        }
+        val userId = intent?.getStringExtra(EXTRA_USER_ID)
+        if (!userId.isNullOrBlank()) {
+            saveOwner(
+                userId,
+                intent?.getStringExtra(EXTRA_USER_NAME).orEmpty(),
+                intent?.getStringExtra(EXTRA_USER_EMAIL).orEmpty(),
+            )
         }
         val creds = creds()
         if (creds == null) {
@@ -61,9 +74,23 @@ class MessageWatchService : Service() {
 
     override fun onDestroy() {
         running = false
+        if (live === this) {
+            live = null
+        }
         handler.removeCallbacksAndMessages(null)
         worker.shutdownNow()
         super.onDestroy()
+    }
+
+    /** A koppintott flash kártya eltűnik, a figyelő visszaáll az alapfeliratra. */
+    private fun clearOpened(flashId: String?) {
+        val manager = getSystemService(NotificationManager::class.java) ?: return
+        if (!flashId.isNullOrBlank()) {
+            manager.cancel(noticeIdFor(flashId))
+        }
+        if (running) {
+            showOngoing(null)
+        }
     }
 
     private fun schedule() {
@@ -99,10 +126,14 @@ class MessageWatchService : Service() {
         val flashes = JSONObject(response.body).optJSONArray("flashes") ?: return
         val seen = prefs().getStringSet(KEY_NOTIFIED, emptySet())?.toMutableSet() ?: mutableSetOf()
         val manager = getSystemService(NotificationManager::class.java)
+        var latest: JSONObject? = null
         for (index in 0 until flashes.length()) {
             val flash = flashes.optJSONObject(index) ?: continue
             if (!flash.isNull("seen")) {
                 continue
+            }
+            if (latest == null) {
+                latest = flash
             }
             val id = flash.optString("id")
             if (id.isBlank() || seen.contains(id)) {
@@ -110,6 +141,12 @@ class MessageWatchService : Service() {
             }
             notify(manager, flash, id)
             seen.add(id)
+        }
+        val shown = latest
+        handler.post {
+            if (running) {
+                showOngoing(shown)
+            }
         }
         if (seen.size > 200) {
             val trimmed = seen.toList().takeLast(200).toMutableSet()
@@ -121,34 +158,52 @@ class MessageWatchService : Service() {
 
     private fun notify(manager: NotificationManager, flash: JSONObject, id: String) {
         val subject = flash.optString("subject").ifBlank { "Új üzenet" }
-        val body = flash.optString("body")
+        val body = flash.optString("body").ifBlank { subject }
         val target = flash.optString("target").ifBlank { "message" }
         val targetId = if (flash.isNull("target_id")) "" else flash.optString("target_id")
-        val open = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
-            putExtra(EXTRA_FLASH_ID, id)
-            putExtra(EXTRA_SUBJECT, subject)
-            putExtra(EXTRA_BODY, body)
-            putExtra(EXTRA_TARGET, target)
-            putExtra(EXTRA_TARGET_ID, targetId)
-        }
-        val request = id.hashCode() and 0x7fffffff
-        val pending = PendingIntent.getActivity(
-            this,
-            request,
-            open,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
         val notification = NotificationCompat.Builder(this, CHANNEL_MESSAGES)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
             .setContentTitle(subject)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
-            .setContentIntent(pending)
+            .setContentIntent(openIntent(id, subject, body, target, targetId))
+            .setGroup(GROUP_MESSAGES)
             .build()
-        val noticeId = if (request == ONGOING_ID) request + 1 else request
-        manager.notify(noticeId, notification)
+        manager.notify(noticeIdFor(id), notification)
+    }
+
+    private fun openIntent(
+        id: String,
+        subject: String,
+        body: String,
+        target: String,
+        targetId: String,
+    ): PendingIntent {
+        val open = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            if (id.isBlank()) {
+                putExtra(EXTRA_OPEN_LIST, true)
+            } else {
+                putExtra(EXTRA_FLASH_ID, id)
+                putExtra(EXTRA_SUBJECT, subject)
+                putExtra(EXTRA_BODY, body)
+                putExtra(EXTRA_TARGET, target)
+                putExtra(EXTRA_TARGET_ID, targetId)
+            }
+            putExtra(EXTRA_USER_ID, prefs().getString(KEY_USER_ID, "").orEmpty())
+            putExtra(EXTRA_USER_NAME, prefs().getString(KEY_USER_NAME, "").orEmpty())
+            putExtra(EXTRA_USER_EMAIL, prefs().getString(KEY_USER_EMAIL, "").orEmpty())
+        }
+        val request = if (id.isBlank()) LIST_REQUEST else noticeIdFor(id)
+        return PendingIntent.getActivity(
+            this,
+            request,
+            open,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     private fun refresh(creds: Creds): String? {
@@ -214,13 +269,8 @@ class MessageWatchService : Service() {
             manager.createNotificationChannel(watch)
             manager.createNotificationChannel(messages)
         }
-        val ongoing = NotificationCompat.Builder(this, CHANNEL_WATCH)
-            .setSmallIcon(android.R.drawable.ic_dialog_email)
-            .setContentTitle("Ibafai Pipaklub")
-            .setContentText("Az üzenetek figyelése fut.")
-            .setOngoing(true)
-            .build()
         return try {
+            val ongoing = watchNotification(null)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 startForeground(ONGOING_ID, ongoing, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
             } else {
@@ -231,6 +281,40 @@ class MessageWatchService : Service() {
             Log.e(TAG, "A figyelés nem indult el", error)
             false
         }
+    }
+
+    /** A kint maradó kártya a legutóbbi olvasatlan üzenetet mutatja, és a koppintás azt nyitja. */
+    private fun showOngoing(flash: JSONObject?) {
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(ONGOING_ID, watchNotification(flash))
+    }
+
+    private fun watchNotification(flash: JSONObject?): android.app.Notification {
+        val id = flash?.optString("id").orEmpty()
+        val subject = flash?.optString("subject").orEmpty().ifBlank { "Új üzenet" }
+        val body = flash?.optString("body").orEmpty().ifBlank { subject }
+        val hasMessage = id.isNotBlank()
+        val text = if (hasMessage) body else "Az üzenetek figyelése fut."
+        val target = flash?.optString("target").orEmpty().ifBlank { "message" }
+        val targetId = if (flash == null || flash.isNull("target_id")) "" else flash.optString("target_id")
+        val pending = if (id.isBlank()) {
+            openIntent("", "", "", "list", "")
+        } else {
+            openIntent(id, subject, body, target, targetId)
+        }
+        val builder = NotificationCompat.Builder(this, CHANNEL_WATCH)
+            .setSmallIcon(android.R.drawable.ic_dialog_email)
+            .setContentTitle(if (hasMessage) subject else "Ibafai Pipaklub")
+            .setContentText(text)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setGroup(GROUP_WATCH)
+            .setContentIntent(pending)
+        if (hasMessage) {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(body))
+        }
+        return builder.build()
     }
 
     private fun stopWatch() {
@@ -266,6 +350,14 @@ class MessageWatchService : Service() {
             .apply()
     }
 
+    private fun saveOwner(id: String, name: String, email: String) {
+        prefs().edit()
+            .putString(KEY_USER_ID, id)
+            .putString(KEY_USER_NAME, name)
+            .putString(KEY_USER_EMAIL, email)
+            .apply()
+    }
+
     private fun clearCreds() {
         prefs().edit().clear().apply()
     }
@@ -282,26 +374,69 @@ class MessageWatchService : Service() {
         private const val KEY_ACCESS = "access"
         private const val KEY_REFRESH = "refresh"
         private const val KEY_BASE = "base"
+        private const val KEY_USER_ID = "user_id"
+        private const val KEY_USER_NAME = "user_name"
+        private const val KEY_USER_EMAIL = "user_email"
         private const val KEY_NOTIFIED = "notified"
         private const val CHANNEL_WATCH = "teamreg_watch"
         private const val CHANNEL_MESSAGES = "teamreg_messages"
+        private const val GROUP_WATCH = "teamreg_watch"
+        private const val GROUP_MESSAGES = "teamreg_messages"
         private const val ONGOING_ID = 41001
+        private const val LIST_REQUEST = 41002
         private const val INTERVAL_MS = 45_000L
+        @Volatile
+        private var live: MessageWatchService? = null
+
+        fun noticeIdFor(flashId: String): Int {
+            val code = flashId.hashCode() and 0x7fffffff
+            return if (code == ONGOING_ID || code == LIST_REQUEST) code + 3 else code
+        }
+
+        /** Értesítésre koppintáskor vagy olvasáskor eltűnik a flash kártya. */
+        fun dismissOpened(context: Context, flashId: String?) {
+            val manager = context.getSystemService(NotificationManager::class.java) ?: return
+            if (!flashId.isNullOrBlank()) {
+                manager.cancel(noticeIdFor(flashId))
+            }
+            val service = live
+            if (service != null) {
+                service.handler.post { service.clearOpened(flashId) }
+            } else if (!flashId.isNullOrBlank()) {
+                manager.cancel(noticeIdFor(flashId))
+            }
+        }
+
         const val ACTION_STOP = "hu.vzsfoto.teamreg.STOP_WATCH"
         const val EXTRA_ACCESS = "accessToken"
         const val EXTRA_REFRESH = "refreshToken"
         const val EXTRA_BASE = "baseUrl"
+        const val EXTRA_USER_ID = "user_id"
+        const val EXTRA_USER_NAME = "user_name"
+        const val EXTRA_USER_EMAIL = "user_email"
+        const val EXTRA_OPEN_LIST = "open_list"
         const val EXTRA_FLASH_ID = "flash_id"
         const val EXTRA_SUBJECT = "flash_subject"
         const val EXTRA_BODY = "flash_body"
         const val EXTRA_TARGET = "flash_target"
         const val EXTRA_TARGET_ID = "flash_target_id"
 
-        fun start(context: Context, access: String, refresh: String, base: String) {
+        fun start(
+            context: Context,
+            access: String,
+            refresh: String,
+            base: String,
+            userId: String,
+            userName: String,
+            userEmail: String,
+        ) {
             val intent = Intent(context, MessageWatchService::class.java).apply {
                 putExtra(EXTRA_ACCESS, access)
                 putExtra(EXTRA_REFRESH, refresh)
                 putExtra(EXTRA_BASE, base)
+                putExtra(EXTRA_USER_ID, userId)
+                putExtra(EXTRA_USER_NAME, userName)
+                putExtra(EXTRA_USER_EMAIL, userEmail)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)

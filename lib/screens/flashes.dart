@@ -163,6 +163,7 @@ Future<void> openFlash(BuildContext context, FlashNote flash) async {
     case 'message':
       final threadId = flash.targetId;
       if (threadId != null && threadId.isNotEmpty) {
+        navigator.popUntil((route) => route.isFirst);
         await navigator.push(
           MaterialPageRoute<void>(builder: (context) => MessageThreadPage(threadId: threadId)),
         );

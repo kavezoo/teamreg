@@ -1,5 +1,5 @@
 /*
- * Klubelnök és admin kezdőlapja, hamburger menüvel.
+ * Klubelnök és admin kezdőlapja. A menü a védett területen belül csúszik be, felül a logóval.
  *
  * A menüpontok sorrendje a _section indexe:
  * 0 jelentkezők, 1 versenyek, 2 saját nevezés, 3 nevezők, 4 tagok, 5 alcsapatok.
@@ -15,7 +15,7 @@ import 'editors.dart';
 import 'member_home.dart';
 import 'past_competitions.dart';
 
-/// Elnöki váz. Az admin címe Admin, különben Klubelnök.
+/// Elnöki váz. Az admin címe Admin, különben Elnök.
 class PresidentHome extends StatefulWidget {
   const PresidentHome({super.key});
 
@@ -26,11 +26,8 @@ class PresidentHome extends StatefulWidget {
 class _PresidentHomeState extends State<PresidentHome> {
   static const _sections = ['Jelentkezők', 'Versenyek', 'Nevezésem', 'Nevezők', 'Tagok', 'Alcsapatok'];
 
-  /// 3 = Nevezők, ez a szokásos kezdőlap.
+  /// 3 = Nevezők: belépéskor ez nyílik, ha nincs olvasatlan üzenet.
   int _section = 3;
-
-  /// Az első betöltés után dől el, kell-e a jelentkezők lapja.
-  bool _pickedStart = false;
 
   @override
   void didChangeDependencies() {
@@ -54,76 +51,55 @@ class _PresidentHomeState extends State<PresidentHome> {
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
     final data = model.data;
-    final title = model.user?.role == 'admin' ? 'Admin' : 'Klubelnök';
+    final title = model.user?.role == 'admin' ? 'Admin' : 'Elnök';
     if (model.error != null && data == null) {
       return ClubScaffold(
         title: title,
+        isHome: true,
         body: LoadProblem(message: model.error!, onRetry: model.loadHome),
       );
     }
     final home = data ?? HomeData.empty;
-    // Üzenetből kért lapot nem írjuk felül. Várakozó jelentkezőnél a 0-s lap kell.
-    if (!_pickedStart && data != null && model.requestedSection == null) {
-      _pickedStart = true;
-      if (data.applicants.isNotEmpty) {
-        _section = 0;
-      }
-    }
     final pending = home.applicants.length;
     return ClubScaffold(
       title: title,
-      drawer: Drawer(
-        child: SafeArea(
-          child: ListView(
-            children: [
-              for (var index = 0; index < _sections.length; index++)
-                ListTile(
-                  selected: index == _section,
-                  title: Text(
-                    index == 0 && pending > 0 ? 'Jelentkezők ($pending)' : _sections[index],
-                  ),
-                  onTap: () {
-                    setState(() => _section = index);
-                    Navigator.of(context).pop();
-                  },
-                ),
-              if (model.user?.role == 'admin')
-                ListTile(
-                  title: const Text('Tagok törlése'),
-                  onTap: () {
-                    Navigator.of(context).pop();
-                    Navigator.of(context).push(
-                      MaterialPageRoute<void>(builder: (context) => const DeleteMembersPage()),
-                    );
-                  },
-                ),
-              ListTile(
-                title: const Text('Korábbi versenyek'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(builder: (context) => const PastCompetitionsPage(canEdit: true)),
-                  );
-                },
+      isHome: true,
+      drawer: ClubDrawer(
+        showAccount: true,
+        children: [
+          for (var index = 0; index < _sections.length; index++)
+            ListTile(
+              selected: index == _section,
+              title: Text(
+                index == 0 && pending > 0 ? 'Jelentkezők ($pending)' : _sections[index],
               ),
-              const Divider(),
-              ListTile(
-                title: const Text('Saját adatok'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  Navigator.of(context).pushNamed('/profile');
-                },
-              ),
-              ListTile(
-                title: const Text('Kijelentkezés'),
-                onTap: () {
-                  Navigator.of(context).pop();
-                  model.logout();
-                },
-              ),
-            ],
+              onTap: () {
+                setState(() => _section = index);
+                Navigator.of(context).pop();
+              },
+            ),
+          if (model.user?.role == 'admin')
+            ListTile(
+              title: const Text('Tagok törlése'),
+              onTap: () {
+                Navigator.of(context).pop();
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(builder: (context) => const DeleteMembersPage()),
+                );
+              },
+            ),
+          ListTile(
+            title: const Text('Korábbi versenyek'),
+            onTap: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute<void>(builder: (context) => const PastCompetitionsPage(canEdit: true)),
+              );
+            },
           ),
-        ),
+          const Divider(),
+          ...accountDrawerTiles(context),
+        ],
       ),
       body: switch (_section) {
         0 => _Applicants(data: home),
@@ -308,7 +284,19 @@ class _CompetitionRow extends StatelessWidget {
           otherTeamPos: b.teamPos,
         ),
       );
-    final names = people.map((row) => row.userName).where((name) => name.isNotEmpty).toList();
+    final names = people
+        .map((row) {
+          if (row.userName.isEmpty) {
+            return '';
+          }
+          if (!row.absent) {
+            return row.userName;
+          }
+          final reason = (row.absentReason ?? '').trim();
+          return reason.isEmpty ? '${row.userName} (nem tud jönni)' : '${row.userName} (nem tud jönni: $reason)';
+        })
+        .where((name) => name.isNotEmpty)
+        .toList();
     return SectionCard(
       bandIndex: bandIndex,
       title: competition.name,
@@ -445,7 +433,17 @@ class _AssignRowState extends State<_AssignRow> {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: UserAvatar(name: row.userName, url: row.avatar),
-      title: Text(row.userName.isEmpty ? 'Névtelen' : row.userName),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(row.userName.isEmpty ? 'Névtelen' : row.userName),
+          if (row.absent)
+            Text(
+              absenceLabel('Nem tud jönni', row.absentReason),
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+        ],
+      ),
       subtitle: DropdownButton<int?>(
         isExpanded: true,
         value: value,

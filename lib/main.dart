@@ -12,7 +12,6 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'screens/flashes.dart';
 import 'screens/login_screen.dart';
 import 'screens/member_home.dart';
-import 'screens/messages.dart';
 import 'screens/new_home.dart';
 import 'screens/president_home.dart';
 import 'screens/profile_page.dart';
@@ -47,6 +46,7 @@ class _TeamRegAppState extends State<TeamRegApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _model.listenForOpens(_consumeOpen);
     _model.bootstrap();
   }
 
@@ -66,22 +66,39 @@ class _TeamRegAppState extends State<TeamRegApp> with WidgetsBindingObserver {
     }
   }
 
-  /// Értesítésből a beszélgetésre vagy az üzenetlistára visz.
-  Future<void> _consumeOpen() async {
+  /// Értesítésből a flash céljára visz: beszélgetés, jelentkezés, lista.
+  /// Igaz, ha megnyitott valamit.
+  Future<bool> _consumeOpen() async {
     final open = await _model.takeNotification();
     if (!mounted || open == null) {
+      return false;
+    }
+    if (!open.belongsTo(_model.user)) {
+      await _model.holdForeignFlash(open);
+      return true;
+    }
+    final navigator = _navigatorKey.currentState;
+    if (navigator == null || !navigator.mounted) {
+      return false;
+    }
+    if (open.flash.target == 'list') {
+      await navigator.push(MaterialPageRoute<void>(builder: (context) => const FlashesPage()));
+      return true;
+    }
+    await openFlash(navigator.context, open.flash);
+    return true;
+  }
+
+  /// Belépéskor: értesítés, különben olvasatlan üzenet → Üzenetek, egyébként a kezdőlap.
+  Future<void> _openStart() async {
+    if (await _consumeOpen()) {
+      return;
+    }
+    if (!mounted || _model.unreadFlashes <= 0) {
       return;
     }
     final navigator = _navigatorKey.currentState;
-    if (navigator == null) {
-      return;
-    }
-    await _model.markFlashSeen(open.id);
-    final threadId = open.targetId;
-    if (open.target == 'message' && threadId != null && threadId.isNotEmpty) {
-      await navigator.push(
-        MaterialPageRoute<void>(builder: (context) => MessageThreadPage(threadId: threadId)),
-      );
+    if (navigator == null || !navigator.mounted) {
       return;
     }
     await navigator.push(MaterialPageRoute<void>(builder: (context) => const FlashesPage()));
@@ -97,7 +114,7 @@ class _TeamRegAppState extends State<TeamRegApp> with WidgetsBindingObserver {
           final user = _model.user;
           if (_model.ready && user != null && _watchedUser != user.id) {
             _watchedUser = user.id;
-            WidgetsBinding.instance.addPostFrameCallback((_) => _consumeOpen());
+            WidgetsBinding.instance.addPostFrameCallback((_) => _openStart());
           }
           if (user == null) {
             _watchedUser = null;

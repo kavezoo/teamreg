@@ -291,6 +291,8 @@ class Registration {
     required this.competitionName,
     required this.comment,
     required this.counts,
+    this.absent = false,
+    this.absentReason,
   });
 
   final int id;
@@ -304,6 +306,8 @@ class Registration {
   final String competitionName;
   final String? comment;
   final Map<String, int> counts;
+  final bool absent;
+  final String? absentReason;
 
   int count(String field) => counts[field] ?? 0;
 
@@ -331,6 +335,8 @@ class Registration {
       competitionName: asText(competition['name']),
       comment: _nullable(json['comment']),
       counts: counts,
+      absent: asBool(json['absent']),
+      absentReason: _nullable(json['absent_reason']),
     );
   }
 
@@ -352,6 +358,8 @@ class Registration {
       competitionName: asText(json['competition']),
       comment: _nullable(json['comment']),
       counts: counts,
+      absent: asBool(json['absent']),
+      absentReason: _nullable(json['absent_reason']),
     );
   }
 }
@@ -359,27 +367,36 @@ class Registration {
 /// A tagoknak szóló névsor egy sora: név, csapat, verseny.
 class RosterLine {
   const RosterLine({
+    required this.userId,
     required this.name,
     required this.team,
     required this.competition,
     required this.avatar,
     required this.teamPos,
+    this.absent = false,
+    this.absentReason,
   });
 
+  final String userId;
   final String name;
   final String team;
   final String competition;
   final String? avatar;
   final int? teamPos;
+  final bool absent;
+  final String? absentReason;
 
   factory RosterLine.fromJson(Map<String, dynamic> json) {
     final avatar = asText(json['avatar']);
     return RosterLine(
+      userId: asText(json['user_id']),
       name: asText(json['name']),
       team: asText(json['team']),
       competition: asText(json['competition']),
       avatar: avatar.isEmpty ? null : avatar,
       teamPos: json['team_pos'] == null ? null : asInt(json['team_pos']),
+      absent: asBool(json['absent']),
+      absentReason: _nullable(json['absent_reason']),
     );
   }
 }
@@ -653,12 +670,16 @@ class MessagePeer {
 
 /// A beszélgetések és a választható címzettek.
 class MessageDesk {
-  const MessageDesk({required this.threads, required this.recipients});
+  const MessageDesk({required this.threads, required this.recipients, this.notice});
 
   final List<MessagePreview> threads;
   final List<MessagePeer> recipients;
 
+  /// A beszélgetéslista hibája. A címzettek ettől még megérkezhetnek.
+  final String? notice;
+
   factory MessageDesk.fromJson(Map<String, dynamic> json) {
+    final notice = asText(json['notice']);
     return MessageDesk(
       threads: [
         for (final item in asList(json['threads']))
@@ -668,6 +689,7 @@ class MessageDesk {
         for (final item in asList(json['recipients']))
           if (item is Map) MessagePeer.fromJson(asMap(item)),
       ],
+      notice: notice.isEmpty ? null : notice,
     );
   }
 }
@@ -676,25 +698,35 @@ class MessageDesk {
 class MessagePost {
   const MessagePost({
     required this.id,
+    required this.senderId,
     required this.senderName,
+    required this.senderAvatar,
     required this.body,
     required this.mine,
     required this.created,
+    required this.when,
   });
 
   final String id;
+  final String senderId;
   final String senderName;
+  final String? senderAvatar;
   final String body;
   final bool mine;
   final String created;
+  final DateTime? when;
 
   factory MessagePost.fromJson(Map<String, dynamic> json) {
+    final created = asText(json['created']);
     return MessagePost(
       id: asText(json['id']),
+      senderId: asText(json['sender_id']),
       senderName: asText(json['sender_name']),
+      senderAvatar: _nullable(json['sender_avatar']),
       body: asText(json['body']),
       mine: asBool(json['mine']),
-      created: asText(json['created']),
+      created: created,
+      when: asDate(created),
     );
   }
 }
@@ -705,12 +737,14 @@ class MessageThread {
     required this.id,
     required this.subject,
     required this.peerName,
+    required this.peerAvatar,
     required this.posts,
   });
 
   final String id;
   final String subject;
   final String peerName;
+  final String? peerAvatar;
   final List<MessagePost> posts;
 
   factory MessageThread.fromJson(Map<String, dynamic> json) {
@@ -718,6 +752,7 @@ class MessageThread {
       id: asText(json['id']),
       subject: asText(json['subject']),
       peerName: asText(json['peer_name']),
+      peerAvatar: _nullable(json['peer_avatar']),
       posts: [
         for (final item in asList(json['posts']))
           if (item is Map) MessagePost.fromJson(asMap(item)),

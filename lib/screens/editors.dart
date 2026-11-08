@@ -12,7 +12,7 @@ import '../models.dart';
 import '../services/maps.dart';
 import '../widgets/common.dart';
 
-/// Nevezés darabszámai és megjegyzése. A határidő után csak olvasható.
+/// Nevezés darabszámai és megjegyzése. Határidő után a visszalépés indokot kér.
 class RegistrationEditor extends StatefulWidget {
   const RegistrationEditor({required this.competition, this.registration, super.key});
 
@@ -71,19 +71,33 @@ class _RegistrationEditorState extends State<RegistrationEditor> {
     if (registration == null) {
       return;
     }
-    final accepted = await confirmAction(
-      context,
-      title: 'Biztosan?',
-      text: 'Biztosan törlöd a jelentkezést? Ezt nem lehet visszavonni.',
-      ok: 'Igen, törlöm',
-      danger: true,
-    );
-    if (!accepted || !mounted) {
-      return;
+    final closed = widget.competition.closed;
+    String? reason;
+    if (closed) {
+      reason = await askAbsenceReason(context, initial: registration.absentReason ?? '');
+      if (reason == null || !mounted) {
+        return;
+      }
+    } else {
+      final accepted = await confirmAction(
+        context,
+        title: 'Biztosan?',
+        text: 'Biztosan törlöd a jelentkezést? Ezt nem lehet visszavonni.',
+        ok: 'Igen, törlöm',
+        danger: true,
+      );
+      if (!accepted || !mounted) {
+        return;
+      }
     }
     setState(() => _busy = true);
     try {
-      await AppScope.of(context).withdrawRegistration(registration.id);
+      final model = AppScope.of(context);
+      if (closed) {
+        await model.markAbsent(registration.id, reason!);
+      } else {
+        await model.withdrawRegistration(registration.id);
+      }
       if (mounted) {
         Navigator.pop(context, true);
       }
@@ -125,11 +139,22 @@ class _RegistrationEditorState extends State<RegistrationEditor> {
           ),
           const SizedBox(height: 16),
           FilledButton(onPressed: _busy ? null : _save, child: const Text('Mentés')),
-          if (widget.registration != null && !competition.closed) ...[
+          if (widget.registration != null) ...[
+            if (widget.registration!.absent) ...[
+              const SizedBox(height: 12),
+              Text(
+                absenceLabel('Nem tudsz jönni', widget.registration!.absentReason),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            ],
             const SizedBox(height: 8),
             OutlinedButton(
               onPressed: _busy ? null : _withdraw,
-              child: const Text('Nem tudok a versenyen részt venni'),
+              child: Text(
+                competition.closed && widget.registration!.absent
+                    ? 'Az indok módosítása'
+                    : 'Nem tudok a versenyen részt venni',
+              ),
             ),
           ],
         ],

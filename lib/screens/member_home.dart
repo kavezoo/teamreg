@@ -32,7 +32,7 @@ class MemberHome extends StatelessWidget {
         showPast: true,
       );
     }
-    return ClubScaffold(title: 'Klubtag', body: body);
+    return ClubScaffold(title: 'Klubtag', isHome: true, body: body);
   }
 }
 
@@ -125,6 +125,11 @@ class _CompetitionCard extends StatelessWidget {
                 Text('${competition.title(entry.key)}: ${registration!.count(entry.value)}'),
             if ((registration!.comment ?? '').trim().isNotEmpty)
               Text('Megjegyzés: ${registration!.comment}'),
+            if (registration!.absent)
+              Text(
+                absenceLabel('Nem tudsz jönni', registration!.absentReason),
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
             Text(
               'Alcsapat: ${registration!.teamName.trim().isEmpty ? 'Nincs besorolva' : registration!.teamName}',
             ),
@@ -211,7 +216,9 @@ class _RosterTile extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       leading: UserAvatar(name: line.name, url: line.avatar),
       title: Text(line.name),
-      subtitle: Text(team),
+      subtitle: Text(
+        line.absent ? '$team\n${absenceLabel('Nem tud jönni', line.absentReason)}' : team,
+      ),
     );
   }
 }

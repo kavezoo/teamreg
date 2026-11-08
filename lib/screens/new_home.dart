@@ -121,6 +121,7 @@ class _NewHomeState extends State<NewHome> {
     final pending = user.membershipRequest == 'pending';
     return ClubScaffold(
       title: 'Új tag, elfogadásra vár',
+      isHome: true,
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
