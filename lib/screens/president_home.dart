@@ -6,51 +6,78 @@ import '../widgets/common.dart';
 import 'editors.dart';
 import 'member_home.dart';
 
-class PresidentHome extends StatelessWidget {
+class PresidentHome extends StatefulWidget {
   const PresidentHome({super.key});
+
+  @override
+  State<PresidentHome> createState() => _PresidentHomeState();
+}
+
+class _PresidentHomeState extends State<PresidentHome> {
+  static const _sections = ['Jelentkezők', 'Versenyek', 'Nevezésem', 'Nevezők', 'Tagok', 'Alcsapatok'];
+
+  int _section = 0;
 
   @override
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
     final data = model.data;
+    final title = model.user?.role == 'admin' ? 'Admin' : 'Ibafai Klubelnök';
     if (model.error != null && data == null) {
       return ClubScaffold(
-        title: 'Ibafai Klubelnök',
+        title: title,
         body: LoadProblem(message: model.error!, onRetry: model.loadHome),
       );
     }
     final home = data ?? HomeData.empty;
     final pending = home.applicants.length;
-    return DefaultTabController(
-      length: 6,
-      child: ClubScaffold(
-        title: model.user?.role == 'admin' ? 'Admin' : 'Ibafai Klubelnök',
-        bottom: TabBar(
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          tabs: [
-            Tab(text: pending == 0 ? 'Jelentkezők' : 'Jelentkezők ($pending)'),
-            const Tab(text: 'Versenyek'),
-            const Tab(text: 'Nevezésem'),
-            const Tab(text: 'Nevezők'),
-            const Tab(text: 'Tagok'),
-            const Tab(text: 'Alcsapatok'),
-          ],
-        ),
-        body: TabBarView(
-          children: [
-            _Applicants(data: home),
-            _Competitions(data: home),
-            CompetitionBoard(
-              competitions: home.competitions,
-              registrations: home.registrations.where((row) => row.userId == model.user?.id).toList(),
-            ),
-            _Groups(data: home),
-            _Members(data: home),
-            _Teams(data: home),
-          ],
+    return ClubScaffold(
+      title: title,
+      drawer: Drawer(
+        child: SafeArea(
+          child: ListView(
+            children: [
+              for (var index = 0; index < _sections.length; index++)
+                ListTile(
+                  selected: index == _section,
+                  title: Text(
+                    index == 0 && pending > 0 ? 'Jelentkezők ($pending)' : _sections[index],
+                  ),
+                  onTap: () {
+                    setState(() => _section = index);
+                    Navigator.of(context).pop();
+                  },
+                ),
+              const Divider(),
+              ListTile(
+                title: const Text('Saját adatok'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  Navigator.of(context).pushNamed('/profile');
+                },
+              ),
+              ListTile(
+                title: const Text('Kijelentkezés'),
+                onTap: () {
+                  Navigator.of(context).pop();
+                  model.logout();
+                },
+              ),
+            ],
+          ),
         ),
       ),
+      body: switch (_section) {
+        0 => _Applicants(data: home),
+        1 => _Competitions(data: home),
+        2 => CompetitionBoard(
+            competitions: home.competitions,
+            registrations: home.registrations.where((row) => row.userId == model.user?.id).toList(),
+          ),
+        3 => _Groups(data: home),
+        4 => _Members(data: home),
+        _ => _Teams(data: home),
+      },
     );
   }
 }
@@ -483,12 +510,56 @@ class _MemberRowState extends State<_MemberRow> {
     } else {
       status = '';
     }
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: UserAvatar(name: member.name, url: member.avatar),
-      title: Text(member.role == 'president' ? '${member.name} · Elnök' : member.name),
-      subtitle: Text(status.isEmpty ? member.email : '${member.email}\n$status'),
-      trailing: action,
+    final mine = member.id == AppScope.of(context).user?.id;
+    final canAppoint = !mine && (member.role == 'member' || member.role == 'president');
+    final appoint = member.role == 'president';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: UserAvatar(name: member.name, url: member.avatar),
+          title: Text(member.role == 'president' ? '${member.name} · Elnök' : member.name),
+          subtitle: Text(status.isEmpty ? member.email : '${member.email}\n$status'),
+          trailing: action,
+        ),
+        if (canAppoint)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: _busy
+                  ? null
+                  : () async {
+                      final accepted = await confirmAction(
+                        context,
+                        title: appoint ? 'Taggá tétel' : 'Elnökké nevezés',
+                        text: appoint
+                            ? '${member.name} újra tag legyen?'
+                            : '${member.name} klubelnök legyen?',
+                      );
+                      if (!accepted || !context.mounted) {
+                        return;
+                      }
+                      setState(() => _busy = true);
+                      try {
+                        await AppScope.of(context).setMemberRole(
+                          member.id,
+                          appoint ? 'member' : 'president',
+                        );
+                      } catch (error) {
+                        if (context.mounted) {
+                          showMessage(context, friendlyError(error));
+                        }
+                      } finally {
+                        if (mounted) {
+                          setState(() => _busy = false);
+                        }
+                      }
+                    },
+              child: Text(appoint ? 'Legyen tag' : 'Legyen elnök'),
+            ),
+          ),
+      ],
     );
   }
 }

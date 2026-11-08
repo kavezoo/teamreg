@@ -558,6 +558,11 @@ class AppModel extends ChangeNotifier {
     await loadHome();
   }
 
+  Future<void> setMemberRole(String id, String role) async {
+    await _api.post('/users/$id/role.json', {'role': role});
+    await loadHome();
+  }
+
   Future<void> approveApplicant(String id) async {
     await _api.post('/applicants/$id/approve.json');
     await loadHome();

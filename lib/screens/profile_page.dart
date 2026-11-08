@@ -35,9 +35,43 @@ class ProfilePage extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
           ProfileForm(user: user, closeOnSave: true),
+          const SizedBox(height: 24),
+          const _DeleteAccountButton(),
         ],
       ),
     );
+  }
+}
+
+class _DeleteAccountButton extends StatelessWidget {
+  const _DeleteAccountButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: () => _delete(context),
+      child: const Text('Az adataim törlése'),
+    );
+  }
+
+  Future<void> _delete(BuildContext context) async {
+    final accepted = await confirmAction(
+      context,
+      title: 'Adatok törlése',
+      text: 'Törlöd a fiókodat és minden hozzá tartozó adatot? Ez kijelentkeztet, és nem vonható vissza.',
+      ok: 'Törlés',
+      danger: true,
+    );
+    if (!accepted || !context.mounted) {
+      return;
+    }
+    try {
+      await AppScope.of(context).deleteAccount();
+    } catch (error) {
+      if (context.mounted) {
+        showMessage(context, friendlyError(error));
+      }
+    }
   }
 }
 

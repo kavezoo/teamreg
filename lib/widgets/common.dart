@@ -39,15 +39,7 @@ class BrandSplash extends StatelessWidget {
               height: 300,
               fit: BoxFit.contain,
             ),
-            const SizedBox(height: 20),
-            Text(
-              'Betöltés...',
-              style: TextStyle(
-                color: dark ? const Color(0xFFD9CBB2) : const Color(0xFF3E2618),
-                fontSize: 16,
-              ),
-            ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 28),
             const SizedBox(
               width: 28,
               height: 28,
@@ -122,17 +114,19 @@ class ThemeToggleButton extends StatelessWidget {
 }
 
 class ClubScaffold extends StatelessWidget {
-  const ClubScaffold({required this.title, required this.body, this.bottom, super.key});
+  const ClubScaffold({required this.title, required this.body, this.bottom, this.drawer, super.key});
 
   final String title;
   final Widget body;
   final PreferredSizeWidget? bottom;
+  final Widget? drawer;
 
   @override
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
     final user = model.user;
     return Scaffold(
+      drawer: drawer,
       appBar: AppBar(
         titleSpacing: 12,
         title: Row(

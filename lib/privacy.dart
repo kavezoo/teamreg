@@ -71,14 +71,14 @@ class PrivacyStatement extends StatelessWidget {
         ),
         const _H('Ki láthatja'),
         const _B('mindenki a saját adatait és a saját nevezését'),
-        const _B('a bejelentkezett tagok az aktuális verseny jelentkezőinek nevét és csapatát'),
+        const _B('a bejelentkezett tagok a kiírt versenyek jelentkezőinek nevét és csapatát'),
         const _B('a klubelnök és az admin a tagsági kérelmeket és a szervezéshez szükséges nevezéseket'),
         const _H('Meddig őrizzük'),
         const _P(
-          'Az új jelentkező az Az adataim törlése gombbal törölheti a fiókját és a hozzá tartozó adatokat. A törlés egyben kijelentkeztet.',
+          'A Saját adatok lapon az Az adataim törlése gomb törli a fiókot és minden hozzá tartozó adatot. A törlés egyben kijelentkeztet.',
         ),
         const _P(
-          'A tag neve és nevezése addig marad meg, amíg a fiók és a nevezés az oldalon van. A nevezés a jelentkezési határidő lejárta előtt visszavonható. A fiók törlését a klubelnöktől lehet kérni.',
+          'A név és a nevezés addig marad meg, amíg a fiók az oldalon van. A nevezés a jelentkezési határidő lejárta előtt külön is visszavonható.',
         ),
         const _H('Jogalap és jogok'),
         const _P(

@@ -44,20 +44,6 @@ class CompetitionBoard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final model = AppScope.of(context);
-    final focus = showRoster ? currentRosterCompetition(competitions) : null;
-    final lines = focus == null
-        ? const <RosterLine>[]
-        : (roster.where((line) => line.competition == focus.name).toList()
-            ..sort(
-              (a, b) => compareByAssignment(
-                name: a.name,
-                team: a.team,
-                teamPos: a.teamPos,
-                otherName: b.name,
-                otherTeam: b.team,
-                otherTeamPos: b.teamPos,
-              ),
-            ));
     return RefreshIndicator(
       onRefresh: model.loadHome,
       child: ListView(
@@ -67,28 +53,13 @@ class CompetitionBoard extends StatelessWidget {
           if (competitions.isEmpty)
             const EmptyNote('Jelenleg nincs verseny, amire jelentkezni lehet.')
           else
-            for (final competition in competitions)
+            for (final competition in competitions) ...[
               _CompetitionCard(
                 competition: competition,
                 registration: _own(competition.id),
               ),
-          if (focus != null) ...[
-            const SizedBox(height: 8),
-            SectionCard(
-              title: 'Jelentkezők',
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(focus.name, style: Theme.of(context).textTheme.titleSmall),
-                  const SizedBox(height: 8),
-                  if (lines.isEmpty)
-                    const EmptyNote('Még nincs jelentkező.')
-                  else
-                    for (final line in lines) _RosterTile(line: line),
-                ],
-              ),
-            ),
-          ],
+              if (showRoster) _RosterBlock(competition: competition, roster: roster),
+            ],
         ],
       ),
     );
@@ -158,6 +129,42 @@ class _CompetitionCard extends StatelessWidget {
     return Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => RegistrationEditor(competition: competition, registration: registration),
+      ),
+    );
+  }
+}
+
+class _RosterBlock extends StatelessWidget {
+  const _RosterBlock({required this.competition, required this.roster});
+
+  final Competition competition;
+  final List<RosterLine> roster;
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = roster.where((line) => line.competition == competition.name).toList()
+      ..sort(
+        (a, b) => compareByAssignment(
+          name: a.name,
+          team: a.team,
+          teamPos: a.teamPos,
+          otherName: b.name,
+          otherTeam: b.team,
+          otherTeamPos: b.teamPos,
+        ),
+      );
+    return SectionCard(
+      title: 'Jelentkezők',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(competition.name, style: Theme.of(context).textTheme.titleSmall),
+          const SizedBox(height: 8),
+          if (lines.isEmpty)
+            const EmptyNote('Még nincs jelentkező.')
+          else
+            for (final line in lines) _RosterTile(line: line),
+        ],
       ),
     );
   }
